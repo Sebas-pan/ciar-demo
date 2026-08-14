@@ -12,7 +12,8 @@ class TabularBundle:
         self.source = source
         self.description = description
 
-
+#Cambiar si tienes un dataset del modulo de scikit-learn 
+#https://scikit-learn.org/stable/modules/generated/sklearn.datasets.load_breast_cancer.html
 def _load_sklearn(name):
     if name != "breast_cancer":
         raise ValueError("Unsupported sklearn dataset: {}".format(name))

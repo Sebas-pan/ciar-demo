@@ -2,6 +2,7 @@ import sys
 
 from .config import load_config
 from .data.type_detector import detect_data_type
+from .images.pipeline import run_image
 from .tabular.pipeline import run_tabular
 
 
@@ -22,9 +23,9 @@ def main(argv=None):
         data_type = detect_data_type(cfg["data"]["source"])
         if data_type == "tabular":
             summary = run_tabular(cfg)
-            _print_summary(summary)
         else:
-            sys.exit("Image pipeline is not implemented yet (planned phase 2).")
+            summary = run_image(cfg)
+        _print_summary(summary)
 
 
 def _print_summary(summary):

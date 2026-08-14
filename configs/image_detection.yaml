@@ -1,0 +1,43 @@
+data_type: auto
+
+data:
+  # Carpetas train/valid/test con images/ y labels/ (formato YOLO detection)
+  source: "unified_pipeline/data/CatsDogs_YOLO11"
+  target: auto
+
+model:
+  type: yolo11
+  variant: yolov11n            # n|s|m|l|x (configurable)
+  device: "0"                  # "0" GPU, "cpu", o "auto"
+  train:
+    epochs: 30
+    imgsz: 640
+    batch: 16
+    workers: 2
+    optimizer: auto
+    patience: 15
+    seed: 42
+    conf: 0.25                 # confianza mínima para inferencia
+    iou: 0.5
+    predict_demo: 4            # nº de imágenes de test usadas en predicción/XAI
+    augment: true
+
+xai:
+  methods: [gradcam, occlusion, lime_image]
+  gradcam:
+    mode: max_detection        # max_detection | class
+    # target_class: 0          # si mode=class
+    min_conf: 0.25
+  occlusion:
+    grid: [8, 8]
+    fill: gray                 # gray | blur
+    min_conf: 0.25
+  lime_image:
+    num_samples: 500
+    num_features: 10
+    min_conf: 0.25
+
+output:
+  dir: "unified_pipeline/outputs"
+  save_model: true
+  save_report: true
