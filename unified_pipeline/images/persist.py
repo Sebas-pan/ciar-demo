@@ -1,6 +1,4 @@
 import datetime
-import json
-import os
 
 
 def build_image_metadata(
@@ -24,9 +22,3 @@ def build_image_metadata(
         "source": source,
         "created_at": datetime.datetime.utcnow().isoformat(),
     }
-
-
-def write_json(path, obj):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(obj, fh, ensure_ascii=False, indent=2, default=str)

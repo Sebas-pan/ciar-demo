@@ -1,8 +1,3 @@
-import datetime
-import json
-import os
-
-
 def build_tabular_metadata(
     bundle, task, model_type, hyperparameters,
     feature_names, classes, metrics, split_cfg,
@@ -21,9 +16,3 @@ def build_tabular_metadata(
         "source": bundle.source,
         "description": bundle.description,
     }
-
-
-def write_json(path, obj):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(obj, fh, ensure_ascii=False, indent=2, default=str)

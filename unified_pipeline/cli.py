@@ -7,14 +7,13 @@ from .tabular.pipeline import run_tabular
 
 
 def main(argv=None):
-    import argparse
+    import argparse #uso de comandos como input para el pipeline
 
     parser = argparse.ArgumentParser(prog="unified_pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
 
     run = sub.add_parser("run", help="Run the full training + XAI pipeline")
     run.add_argument("--config", required=True, help="Path to the YAML config")
-    run.add_argument("--verbose", action="store_true", help="Print extended detail")
 
     args = parser.parse_args(argv)
 

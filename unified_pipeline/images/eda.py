@@ -3,7 +3,16 @@ from collections import Counter
 
 from PIL import Image
 
-from ..tabular.persist import write_json
+from ..io import write_json
+
+_CLASS_COLORS = [
+    (0, 255, 0),   # green
+    (255, 0, 0),   # blue
+    (0, 0, 255),   # red
+    (255, 255, 0), # cyan
+    (0, 255, 255), # yellow
+    (255, 0, 255), # magenta
+]
 
 
 def _parse_label_file(path):
@@ -21,6 +30,29 @@ def _parse_label_file(path):
     return ids
 
 
+def _parse_label_boxes(path, w, h):
+    """Retorna lista de (cid, x1, y1, x2, y2) en píxeles desde un label YOLO."""
+    boxes = []
+    if not path or not os.path.exists(path):
+        return boxes
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            try:
+                cid = int(float(parts[0]))
+                xc, yc, bw, bh = map(float, parts[1:5])
+            except ValueError:
+                continue
+            boxes.append((
+                cid,
+                int((xc - bw / 2) * w), int((yc - bh / 2) * h),
+                int((xc + bw / 2) * w), int((yc + bh / 2) * h),
+            ))
+    return boxes
+
+
 def run_eda(bundles, out_dir):
     """EDA del dataset YOLO: distribución por clase y split, stats de tamaño,
     grid de muestras con cajas (train). Guarda eda.json + PNGs.
@@ -35,7 +67,10 @@ def run_eda(bundles, out_dir):
         for label_path in bundle.labels:
             for cid in _parse_label_file(label_path):
                 counts[cid] += 1
-        split_counts[bundle.split] = {bundle.names[cid]: int(cnt) for cid, cnt in counts.items()}
+        split_counts[bundle.split] = {
+            bundle.names[cid] if cid < len(bundle.names) else "class_{}".format(cid): int(cnt)
+            for cid, cnt in counts.items()
+        }
 
     # stats de tamaño sobre el primer split (train)
     train = next((b for b in bundles if b.split == "train"), bundles[0])
@@ -114,29 +149,19 @@ def _plot_sample_grid(bundle, out_path, n=6):
         if img is None:
             continue
         h, w = img.shape[:2]
-        if _parse_label_file(label_path):
-            with open(label_path, "r", encoding="utf-8") as fh:
-                for line in fh:
-                    parts = line.split()
-                    if len(parts) < 5:
-                        continue
-                    cid = int(float(parts[0]))
-                    xc, yc, bw, bh = map(float, parts[1:5])
-                    x1 = int((xc - bw / 2) * w)
-                    y1 = int((yc - bh / 2) * h)
-                    x2 = int((xc + bw / 2) * w)
-                    y2 = int((yc + bh / 2) * h)
-                    color = (0, 255, 0) if bundle.names[cid] == "Cat" else (255, 0, 0)
-                    cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-                    cv2.putText(img, bundle.names[cid], (x1, max(y1 - 4, 15)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        for cid, x1, y1, x2, y2 in _parse_label_boxes(label_path, w, h):
+            color = _CLASS_COLORS[cid % len(_CLASS_COLORS)]
+            name = bundle.names[cid] if cid < len(bundle.names) else "class_{}".format(cid)
+            cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(img, name, (x1, max(y1 - 4, 15)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         axes[idx].imshow(img_rgb)
         axes[idx].axis("off")
         axes[idx].set_title(os.path.basename(img_path)[:24])
     for idx in range(min(n, len(bundle.images)), len(axes)):
         axes[idx].axis("off")
-    fig.suptitle("Muestras train con cajas (verde=Cat, azul=Dog)")
+    fig.suptitle("Muestras train con cajas (color por clase)")
     fig.tight_layout()
     fig.savefig(out_path, dpi=100)
     plt.close(fig)

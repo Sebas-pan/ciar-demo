@@ -4,7 +4,8 @@ import yaml
 
 DEFAULTS = {
     "data_type": "auto",
-    "data": {"source": None, "target": "auto"},
+    "data": {"source": None, "target": "auto", "drop_columns": []},
+    "supervised": {"task": "auto"},
     "split": {
         "train_val_test": [0.7, 0.15, 0.15],
         "stratify": True,

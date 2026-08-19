@@ -47,12 +47,27 @@ def _load_file(path):
 def load_dataset(cfg):
     source = cfg["data"]["source"]
     if source.startswith("sklearn:"):
-        return _load_sklearn(source.split(":", 1)[1])
-    df = _load_file(source)
-    return TabularBundle(
-        df=df,
-        target=None,
-        feature_names=None,
-        source=source,
-        description=os.path.basename(source),
-    )
+        bundle = _load_sklearn(source.split(":", 1)[1])
+    else:
+        df = _load_file(source)
+        bundle = TabularBundle(
+            df=df,
+            target=None,
+            feature_names=None,
+            source=source,
+            description=os.path.basename(source),
+        )
+
+    drop_cols = cfg["data"].get("drop_columns") or []
+    explicit_target = cfg["data"].get("target", "auto")
+    missing = [c for c in drop_cols if c not in bundle.df.columns]
+    if missing:
+        raise ValueError(
+            "drop_columns not found in dataframe: {}".format(missing))
+    if (explicit_target not in ("auto", "")
+            and explicit_target in drop_cols):
+        raise ValueError(
+            "Target column '{}' cannot be dropped".format(explicit_target))
+    if drop_cols:
+        bundle.df = bundle.df.drop(columns=drop_cols)
+    return bundle

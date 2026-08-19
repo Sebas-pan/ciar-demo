@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from ..tabular.persist import write_json
+from ..io import write_json
 
 
 def is_tree_based(model):
@@ -32,10 +32,14 @@ def run_shap(model, X_train, X_test, feature_names, out_dir,
     if is_tree_based(model):
         explainer = _safe_tree_explainer(model)
     else:
-        background = X_train[: min(100, len(X_train))]
+        background = X_train[: min(100, X_train.shape[0])]
+        if hasattr(background, "toarray"):
+            background = background.toarray()
         explainer = _safe_kernel_explainer(model, background)
 
-    X_eval = X_test[: min(sample_limit, len(X_test))]
+    X_eval = X_test[: min(sample_limit, X_test.shape[0])]
+    if hasattr(X_eval, "toarray"):
+        X_eval = X_eval.toarray()
     raw = explainer.shap_values(np.asarray(X_eval, dtype=float))
 
     if isinstance(raw, list):

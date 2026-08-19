@@ -2,7 +2,11 @@ data_type: auto
 
 data:
   source: "sklearn:breast_cancer"
+  # source: "unified_pipeline/data/house_prices/train.csv"
   target: auto
+
+supervised:
+  task: classification  # classification | regression | auto
 
 split:
   train_val_test: [0.7, 0.15, 0.15]

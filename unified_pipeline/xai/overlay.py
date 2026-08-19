@@ -1,6 +1,16 @@
 import cv2
 import numpy as np
 
+# Paleta por clase (independiente del dataset)
+_CLASS_COLORS = [
+    (0, 255, 0),   # green
+    (255, 0, 0),   # blue
+    (0, 0, 255),   # red
+    (255, 255, 0), # cyan
+    (0, 255, 255), # yellow
+    (255, 0, 255), # magenta
+]
+
 
 def letterbox(img_bgr, new_size, stride=32):
     """Resize con padding (letterbox) como hace ultralytics.
@@ -34,15 +44,6 @@ def rescale_boxes(boxes_xyxy, ratio, dw, dh):
     return boxes_xyxy * ratio + [dw, dh, dw, dh]
 
 
-def heatmap_to_bgr(heatmap, canvas_size, alpha=0.65, colormap=cv2.COLORMAP_JET):
-    """heatmap: array (H, W) en [0,1]. Devuelve imagen BGR del tamaño canvas_size."""
-    heat = (np.clip(heatmap, 0.0, 1.0) * 255).astype(np.uint8)
-    colored = cv2.applyColorMap(heat, colormap)
-    canvas = np.full((canvas_size, canvas_size, 3), 114, dtype=np.uint8)
-    canvas = colored
-    return canvas, colored
-
-
 def compose_overlay(base_bgr, heat_bgr, boxes_xyxy, labels, confs, names,
                     alpha=0.55, out_size=None):
     """Superpone heatmap (cámara de calor) + cajas + etiquetas sobre la base."""
@@ -52,16 +53,12 @@ def compose_overlay(base_bgr, heat_bgr, boxes_xyxy, labels, confs, names,
 
     for box, label, conf in zip(boxes_xyxy, labels, confs):
         x1, y1, x2, y2 = [int(v) for v in box]
-        color = (0, 255, 0) if names[label] == "Cat" else (255, 0, 0)
+        color = _CLASS_COLORS[label % len(_CLASS_COLORS)]
+        name = names[label] if label < len(names) else "class_{}".format(label)
         cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
-        text = "{} {:.2f}".format(names[label], float(conf))
+        text = "{} {:.2f}".format(name, float(conf))
         cv2.putText(overlay, text, (x1, max(y1 - 4, 12)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
     if out_size is not None:
         overlay = cv2.resize(overlay, out_size, interpolation=cv2.INTER_LINEAR)
     return overlay
-
-
-def optical_attention(canvas_rgb):
-    """Placeholder para window re-export; canvas_rgb es BGR en realidad."""
-    return canvas_rgb

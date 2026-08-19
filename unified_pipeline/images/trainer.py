@@ -14,12 +14,12 @@ def resolve_device(cfg):
 
 
 def run_training(cfg, model, data_spec, run_dir):
-    """Entrena modelo YOLO11 y retorna la ruta al mejor checkpoint y métricas de val."""
+    """Entrena modelo YOLO11 y retorna la ruta al mejor checkpoint."""
     train_cfg = cfg["model"].get("train", {})
     epochs = int(train_cfg.get("epochs", 30))
     imgsz = int(train_cfg.get("imgsz", 640))
     batch = train_cfg.get("batch", 16)
-    device = train_cfg.get("device", "0")
+    device = resolve_device(cfg)
     workers = int(train_cfg.get("workers", 2))
     optimizer = train_cfg.get("optimizer", "auto")
     lr = train_cfg.get("lr")
@@ -55,16 +55,17 @@ def run_training(cfg, model, data_spec, run_dir):
     if lr is not None:
         train_args["lr0"] = float(lr)
 
-    results_dict = model.train(**train_args)
+    model.train(**train_args)
 
     best_path = os.path.join(run_dir, "train", "weights", "best.pt")
     if not os.path.exists(best_path):
         # fallback: buscar en cualquier subcarpeta train*
         import glob
+
         cands = sorted(glob.glob(os.path.join(run_dir, "train*", "weights", "best.pt")))
         if cands:
             best_path = cands[0]
         else:
             raise FileNotFoundError("Could not find best.pt after training")
 
-    return best_path, results_dict
+    return best_path

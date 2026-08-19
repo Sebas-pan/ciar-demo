@@ -1,12 +1,8 @@
-import os
 from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Tuple
 
 import yaml
-
-TABULAR_EXT = {".csv", ".tsv", ".xlsx", ".xls", ".parquet", ".json"}
-IMAGE_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp", ".npy"}
 
 
 @dataclass
@@ -16,20 +12,6 @@ class ImageSplitBundle:
     nc: int  # número de clases
     names: List[str]  # nombres de clase ['Cat', 'Dog', ...]
     split: str  # 'train' | 'valid' | 'test'
-
-
-def detect_data_type(source: str) -> str:
-    source = str(source)
-    if source.startswith("sklearn:"):
-        return "tabular"
-    if os.path.isdir(source):
-        return "image"
-    ext = os.path.splitext(source)[1].lower()
-    if ext in TABULAR_EXT:
-        return "tabular"
-    if ext in IMAGE_EXT:
-        return "image"
-    raise ValueError("Could not detect data type for source: {}".format(source))
 
 
 def _read_data_yaml(yaml_path: Path) -> dict:
@@ -113,21 +95,6 @@ def write_yolo_data_yaml(data_spec: dict, out_path: str) -> str:
     return str(out)
 
 
-def _count_labels_per_image(label_dir: Path) -> int:
-    """Retorna número de labels (cajas) por imagen como referencia; no estricto."""
-    count = 0
-    if label_dir.exists():
-        for lbl in label_dir.glob("*.txt"):
-            try:
-                with open(lbl, "r") as f:
-                    n = len(f.read().strip().split())
-                    if n > 0:
-                        count += 1
-            except Exception:
-                pass
-    return count
-
-
 def _collect_split_images_labels(base_dir: Path, split_name: str) -> Tuple[List[Path], List[Path]]:
     """Colecta imágenes y labels para un split (train/valid/test).
     Asume estructura: base_dir/split/images/*.jpg, *.png, etc.
@@ -146,19 +113,18 @@ def _collect_split_images_labels(base_dir: Path, split_name: str) -> Tuple[List[
     # sort for deterministic order
     images = sorted(images, key=lambda p: p.name)
 
-    # Corresponding labels: replace images path with labels path, keep same stem
+    # Corresponding labels: same stem in the labels dir (no OS-specific path hacks)
     labels: List[Path] = []
     for img_path in images:
-        lbl_path = Path(str(img_path).replace("/images/", "/labels/")).with_suffix(".txt")
+        lbl_path = lbl_dir / (img_path.stem + ".txt")
         if lbl_dir.exists() and not lbl_path.exists():
             # fallback: some datasets have .png labels etc.; try to find any label
             found = False
-            if lbl_dir.exists():
-                for lbl_try in lbl_dir.glob("*.txt"):
-                    if lbl_try.stem == img_path.stem:
-                        lbl_path = lbl_try
-                        found = True
-                        break
+            for lbl_try in lbl_dir.glob("*.txt"):
+                if lbl_try.stem == img_path.stem:
+                    lbl_path = lbl_try
+                    found = True
+                    break
             if not found:
                 lbl_path = Path("")  # placeholder
         labels.append(lbl_path)
@@ -200,20 +166,14 @@ def load_yolo_dataset(dataset_dir: str,
     bundles: List[ImageSplitBundle] = []
     for split in splits:
         images, labels = _collect_split_images_labels(base, split)
-        # Filtrar labels vacíos o sin archivo
+        # Filtrar imágenes inexistentes; mantener la imagen aunque falte su label
         valid_imgs = []
         valid_lbls = []
         for img, lbl in zip(images, labels):
-            if img == Path("") or not img.exists():
+            if not img.exists():
                 continue
-            # Normalizar label path: quitar placeholder vacío
-            lbl_path = Path(str(lbl)) if lbl else Path("")
-            if not lbl_path.exists():
-                # count empty labels but keep image; o podríamos drop, pero mantengamos para máximo info
-                valid_imgs
-                # keep image even if label missing
             valid_imgs.append(img)
-            valid_lbls.append(lbl_path)
+            valid_lbls.append(lbl if lbl.exists() else Path(""))
         bundles.append(ImageSplitBundle(
             images=valid_imgs,
             labels=valid_lbls,
@@ -222,11 +182,3 @@ def load_yolo_dataset(dataset_dir: str,
             split=split,
         ))
     return bundles
-
-
-# Export bundle for quick use
-def quick_bundle(dataset_dir: str, split: str = "train") -> ImageSplitBundle:
-    bundles = load_yolo_dataset(dataset_dir, splits=(split,))
-    if bundles:
-        return bundles[0]
-    raise ValueError(f"No bundle for split '{split}' under {dataset_dir}")

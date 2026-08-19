@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Repo shape
-- Not a git repo. No README, configs, tests, or CI. The project is 3 Jupyter notebooks + a `unified_pipeline/` package + `requirements.txt`.
+- Git repo (`Explainable_AI_CIAR`). No tests or CI. The project is `unified_pipeline/` (a parametrized train+explain package) + `configs/` + a couple of exploratory notebooks in `models/` and `xai/` + `requirements.txt`.
 - Two pipeline branches driven by the same CLI (dispatch via `detect_data_type` on `data.source`):
   - **Tabular** (sklearn ML + SHAP/LIME/feature-importance) — `data.source` = `sklearn:breast_cancer` or a tabular file path.
   - **Image** (YOLO11 detection + Grad-CAM/Occlusion/LIME-Image) — `data.source` = a YOLO-format dataset dir.

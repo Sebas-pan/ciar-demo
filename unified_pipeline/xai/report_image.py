@@ -1,12 +1,12 @@
 import os
 
-from ..images.persist import write_json
+from ..io import write_json
 
 
 def build_image_report(run_dir, metrics, names, variant, device,
                        train_minutes, predictions, xai, xai_dir, eda, model_meta):
     """Genera report.md de la rama imagen."""
-    lines = ["# Reporte — Detección YOLO11 (Cats/Dogs)", ""]
+    lines = ["# Reporte — Detección YOLO11", ""]
 
     lines.append("## Entrenamiento")
     lines.append("- Modelo: `{}` (variante `{}`)".format(model_meta.get("model_type"), variant))
@@ -73,8 +73,3 @@ def build_image_report(run_dir, metrics, names, variant, device,
     with open(os.path.join(run_dir, "report.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
     return os.path.join(run_dir, "report.md")
-
-
-def write_image_report(run_dir, xai_dir, lines):
-    with open(os.path.join(run_dir, "report.md"), "w", encoding="utf-8") as fh:
-        fh.write("\n".join(lines))

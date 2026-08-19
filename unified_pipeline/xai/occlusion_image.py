@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 from ..images.predict import predict_image, summarize_result
-from ..images.persist import write_json
+from ..io import write_json
 from .overlay import compose_overlay
 
 

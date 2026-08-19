@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-from ..tabular.persist import write_json
+from ..io import write_json
 
 
 def build_report(model, task, X_test, y_test, class_names,
@@ -13,13 +13,19 @@ def build_report(model, task, X_test, y_test, class_names,
     lime_instances = lime.get("instances") or []
     shap_instances = shap_data.get("instances") or []
 
-    for i in range(min(num_instances, len(X_test))):
+    def _coerce(value):
+        return float(value) if task == "regression" else int(value)
+
+    for i in range(min(num_instances, X_test.shape[0])):
         rec = {
             "position": i,
             "index": int(y_test.index[i]),
-            "true": int(y_test.iloc[i]),
+            "true": _coerce(y_test.iloc[i]),
         }
-        row = np.asarray(X_test[i], dtype=float).reshape(1, -1)
+        row = X_test[i]
+        if hasattr(row, "toarray"):
+            row = row.toarray()
+        row = np.asarray(row, dtype=float).reshape(1, -1)
         if hasattr(model, "predict_proba"):
             proba = model.predict_proba(row)[0]
             rec["probabilities"] = {
@@ -28,7 +34,7 @@ def build_report(model, task, X_test, y_test, class_names,
             }
             rec["prediction"] = int(model.classes_[int(np.argmax(proba))])
         else:
-            rec["prediction"] = int(model.predict(row)[0])
+            rec["prediction"] = _coerce(model.predict(row)[0])
         if i < len(lime_instances):
             rec["top_features_lime"] = lime_instances[i].get("as_list", [])
         if i < len(shap_instances):

@@ -6,7 +6,8 @@ import numpy as np
 import torch
 
 from ..images.predict import predict_image, summarize_result
-from ..images.persist import write_json
+from ..images.trainer import resolve_device
+from ..io import write_json
 from .overlay import letterbox, compose_overlay, rescale_boxes
 
 
@@ -28,7 +29,7 @@ def run_gradcam(cfg, model, image_paths, out_dir,
     os.makedirs(out_dir, exist_ok=True)
     train_cfg = cfg["model"].get("train", {})
     raw_module = model.model
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = resolve_device(cfg)
     raw_module.to(device)
     if imgsz is None:
         imgsz = int(train_cfg.get("imgsz", 640))
@@ -76,7 +77,7 @@ def run_gradcam(cfg, model, image_paths, out_dir,
         confs = [d["confidence"] for d in dets]
         boxes_scaled = rescale_boxes(boxes, ratio, dw, dh)
 
-        heat_bgr, _ = _heat_to_bgr(full_cam, (H, W))
+        heat_bgr = _heat_to_bgr(full_cam, (H, W))
         overlay_bgr = compose_overlay(
             canvas, heat_bgr, boxes_scaled, labels, confs, names,
             alpha=0.55, out_size=(W, H))
@@ -189,4 +190,4 @@ def _forward_gradcam(raw_module, det, tensor, H, W, device, target_cls=None):
 
 def _heat_to_bgr(cam1d, shape):
     heat = (np.clip(cam1d, 0, 1) * 255).astype(np.uint8)
-    return cv2.applyColorMap(heat, cv2.COLORMAP_JET), heat
+    return cv2.applyColorMap(heat, cv2.COLORMAP_JET)

@@ -5,6 +5,13 @@ DEFAULT_RATIOS = (0.7, 0.15, 0.15)
 
 def split_by_task(df, target, task, split_cfg):
     ratios = list(split_cfg.get("train_val_test") or DEFAULT_RATIOS)
+    if len(ratios) != 3:
+        raise ValueError(
+            "train_val_test must have exactly 3 ratios, got {}".format(len(ratios)))
+    total = sum(ratios)
+    if total <= 0 or abs(total - 1.0) > 1e-6:
+        raise ValueError(
+            "train_val_test ratios must sum to 1.0, got {}".format(total))
     rs = split_cfg.get("random_state", 42)
     stratify = bool(split_cfg.get("stratify", True))
     train_ratio, val_ratio, test_ratio = ratios

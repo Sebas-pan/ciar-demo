@@ -5,7 +5,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from .persist import write_json
+from ..io import write_json
 
 
 def run_eda(df, target, out_dir):

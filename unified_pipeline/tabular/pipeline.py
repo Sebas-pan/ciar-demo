@@ -3,6 +3,7 @@ import os
 
 from ..data.loader import load_dataset
 from ..data.validation import validate
+from ..io import write_json
 from ..modelstore import save_artifact
 from ..xai.feature_importance import global_importance, plot_importance
 from ..xai.lime_local import run_lime
@@ -10,10 +11,10 @@ from ..xai.report import build_report, write_report
 from ..xai.shap_local_global import run_shap
 from .eda import run_eda
 from .evaluate import evaluate
-from .persist import build_tabular_metadata, write_json
+from .persist import build_tabular_metadata
 from .preprocess import build_preprocessor, transformed_feature_names
 from .split import split_by_task
-from .target_task import detect_task, resolve_target
+from .target_task import resolve_target, resolve_task
 from .trainer import train_estimator
 
 
@@ -23,13 +24,12 @@ def run_tabular(cfg):
 
     validation_report, warnings = validate(df)
     target = resolve_target(df, cfg["data"].get("target", "auto"))
-    task = detect_task(df[target])
+    task = resolve_task(cfg, df[target])
     split_cfg = cfg["split"]
     parts = split_by_task(df, target, task, split_cfg)
 
     preprocessor, _, _ = build_preprocessor(parts["X_train"])
     X_train_t = preprocessor.transform(parts["X_train"])
-    X_val_t = preprocessor.transform(parts["X_val"])
     X_test_t = preprocessor.transform(parts["X_test"])
     feature_names = transformed_feature_names(preprocessor)
 
@@ -86,7 +86,7 @@ def run_tabular(cfg):
     xai_cfg = cfg["xai"]
     xai = {"feature_importance": None, "shap": None, "lime": None}
 
-    if xai_cfg.get("feature_importance", True) and task == "classification":
+    if xai_cfg.get("feature_importance", True):
         try:
             table, method = global_importance(estimator, feature_names)
             plot_importance(
@@ -111,7 +111,7 @@ def run_tabular(cfg):
         except Exception as exc:
             xai["shap"] = {"error": str(exc)}
 
-    if xai_cfg.get("lime", True) and task == "classification":
+    if xai_cfg.get("lime", True):
         try:
             lime_out = run_lime(
                 model=estimator,
@@ -125,6 +125,7 @@ def run_tabular(cfg):
                 num_instances=xai_cfg.get("num_instances", 3),
                 random_state=split_cfg.get("random_state", 42),
                 out_dir=xai_dir,
+                mode=task,
             )
             xai["lime"] = {"saved": True, "instances": lime_out}
         except Exception as exc:
@@ -150,7 +151,7 @@ def run_tabular(cfg):
         "source": bundle.source,
         "split_shapes": {
             "train": int(X_train_t.shape[0]),
-            "val": int(X_val_t.shape[0]),
+            "val": int(len(parts["X_val"])),
             "test": int(X_test_t.shape[0]),
         },
         "metrics": metrics,

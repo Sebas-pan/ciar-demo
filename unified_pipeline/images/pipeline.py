@@ -3,15 +3,15 @@ import os
 import shutil
 
 from ..data.image_loader import build_yolo_data_spec, load_yolo_dataset, write_yolo_data_yaml
-from ..modelstore import save_artifact, identify_model_type
+from ..io import write_json
 from ..xai.gradcam_image import run_gradcam
 from ..xai.lime_image import run_lime_image
 from ..xai.occlusion_image import run_occlusion
-from ..xai.report_image import build_image_report, write_image_report
+from ..xai.report_image import build_image_report
 from .eda import run_eda
 from .evaluate import run_evaluation
 from .models import create_estimator, identify_model_type as _identify_yolo
-from .persist import build_image_metadata, write_json
+from .persist import build_image_metadata
 from .predict import run_predictions
 from .trainer import resolve_device, run_training
 
@@ -48,7 +48,7 @@ def run_image(cfg):
     train_cfg = model_cfg.get("train", {})
 
     t0 = datetime.datetime.now()
-    best_path, _ = run_training(cfg, model, data_yaml, run_dir)
+    run_training(cfg, model, data_yaml, run_dir)
     train_minutes = round((datetime.datetime.now() - t0).total_seconds() / 60, 2)
 
     # --- Evaluación en test ---
