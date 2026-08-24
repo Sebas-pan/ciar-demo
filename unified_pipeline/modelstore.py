@@ -13,7 +13,7 @@ def save_artifact(out_dir, model, preprocessor, meta):
     joblib.dump(preprocessor, preproc_path)
     meta["model_path"] = "model.pkl"
     meta["preprocessor_path"] = "preprocessor.pkl"
-    meta["created_at"] = datetime.datetime.utcnow().isoformat()
+    meta["created_at"] = datetime.datetime.now().isoformat()
     with open(os.path.join(out_dir, "metadata.json"), "w", encoding="utf-8") as fh:
         json.dump(meta, fh, ensure_ascii=False, indent=2, default=str)
     return out_dir

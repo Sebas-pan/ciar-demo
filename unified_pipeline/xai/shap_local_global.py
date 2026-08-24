@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+
 from ..io import write_json
 
 
@@ -88,5 +89,5 @@ def _safe_tree_explainer(model):
 
 def _safe_kernel_explainer(model, background):
     import shap
-
+    
     return shap.KernelExplainer(model.predict, background)

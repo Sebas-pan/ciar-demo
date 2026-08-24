@@ -5,7 +5,8 @@ from lime import lime_tabular
 
 from ..io import write_json
 
-
+# Intentar dividirlo en dos funciones, una para regresion y otra para clasificacion, 
+# y llamarlas desde aqui.
 def run_lime(model, X_train, y_train, X_test, y_test, feature_names,
              class_names, num_features=10, num_instances=3,
              random_state=42, out_dir=None, mode="classification"):

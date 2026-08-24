@@ -5,7 +5,6 @@ IMAGE_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff", ".webp", 
 
 
 def detect_data_type(source):
-    #No son tan necesarios los primeros if, pero los dejo por si acaso
     source = str(source)
     if source.startswith("sklearn:"):
         return "tabular"

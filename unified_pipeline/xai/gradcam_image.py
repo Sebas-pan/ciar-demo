@@ -1,5 +1,4 @@
 import os
-from copy import deepcopy
 
 import cv2
 import numpy as np
@@ -16,9 +15,10 @@ def run_gradcam(cfg, model, image_paths, out_dir,
                 min_conf=0.25, imgsz=None):
     """Grad-CAM adaptado a detección YOLO11.
 
-    Reconstruye la rama de clases (head.cv3) en una copia desacoplada del modelo
-    (evita tocar el modelo en vivo / tensores inference) y calcula el gradiente
-    de una pérdida BCE por clase sobre sus activaciones.
+    Captura las activaciones de entrada de la rama de clases (head.cv3) con un
+    forward hook bajo inference_mode y construye el mapa ponderando cada canal
+    por la confianza de la clase objetivo (sigmoid de sus logits), en lugar de
+    retropropagar una pérdida. Ver _forward_gradcam.
 
     mode:
       - 'max_detection': usa la clase del bbox de mayor confianza (si hay).
@@ -114,10 +114,20 @@ def _det_heads(raw_module):
 
 
 def _forward_gradcam(raw_module, det, tensor, H, W, device, target_cls=None):
-    """Reconstruye la rama de clases con una copia profunda (sin mutar el modelo).
+    """Mapa de calor por activación ponderada con la confianza de la clase objetivo.
 
-    Pérdida: BCE(logit_clase, ones) → gradiente no nulo incluso con sigmoid
-    saturado. Retorna (cam normalizada, clase elegida) o None.
+    En lugar de retropropagar una BCE por píxel (cuyo gradiente es inverso a la
+    confianza de la clase — el fondo queda con mayor magnitud — y con abs() la
+    atribución se invierte), cada canal se pondera por cuánto contribuye a la
+    presencia de la clase objetivo y el mapa se activa con ReLU y se enmascara
+    con la confianza:
+
+        score    = sigmoid(logits_clase)                    # (1,1,h,w)
+        weights  = mean_spatial(score * activaciones)       # (1,C,1,1)
+        cam      = ReLU(sum_canales(weights * activaciones)) * score
+
+    El fondo (score≈0) queda en azul y el objeto (score≈1) en rojo.
+    Retorna (cam normalizada, clase elegida) o None.
     """
     captured = {}
 
@@ -133,12 +143,7 @@ def _forward_gradcam(raw_module, det, tensor, H, W, device, target_cls=None):
     if not features:
         return None
 
-    # copia desacoplada de la rama de clases: parámetros normales con grad activo
-    cv3_copy = deepcopy(det.cv3).to(device)
-    for p in cv3_copy.parameters():
-        p.requires_grad_(True)
-
-    with torch.enable_grad():
+    with torch.inference_mode():
         feats_norm = []
         for feat in features:
             f = torch.empty_like(feat, dtype=feat.dtype, device=device,
@@ -146,7 +151,7 @@ def _forward_gradcam(raw_module, det, tensor, H, W, device, target_cls=None):
             f.copy_(feat.to(device))
             feats_norm.append(f)
 
-        act_list = [cv3_copy[i](feat) for i, feat in enumerate(feats_norm)]
+        act_list = [det.cv3[i](feat) for i, feat in enumerate(feats_norm)]
 
         if target_cls is None:
             nc = act_list[0].shape[1]
@@ -155,33 +160,16 @@ def _forward_gradcam(raw_module, det, tensor, H, W, device, target_cls=None):
                 scores = scores + torch.sigmoid(act).sum(dim=(0, 2, 3))
             target_cls = int(torch.argmax(scores).item())
 
-        grads = [None] * len(act_list)
-
-        def capture_grad(i):
-            def fn(g):
-                grads[i] = g.detach().clone()
-            return fn
-
-        bce = torch.nn.functional.binary_cross_entropy_with_logits
-        loss = torch.zeros((), device=device)
-        for i, act in enumerate(act_list):
-            act.register_hook(capture_grad(i))
+        full_cam = None
+        for act in act_list:
             cls_logits = act[:, target_cls:target_cls + 1, :, :]
-            loss = loss + bce(cls_logits, torch.ones_like(cls_logits))
-
-        loss.backward()
-
-    full_cam = None
-    for i, act in enumerate(act_list):
-        if grads[i] is None:
-            continue
-        weights = grads[i].mean(dim=(2, 3), keepdim=True)
-        # magnitud de la atribución por canal (abs evita vacíos con grad negativo)
-        cam = ((weights * act).sum(dim=1, keepdim=True)).abs()[0, 0]
-        cam = torch.nn.functional.interpolate(
-            cam.unsqueeze(0).unsqueeze(0), size=(H, W), mode="bilinear")[0, 0]
-        cam = cam.detach().cpu().numpy()
-        full_cam = cam if full_cam is None else full_cam + cam
+            score = torch.sigmoid(cls_logits)
+            weights = (score * act).mean(dim=(2, 3), keepdim=True)
+            cam = (weights * act).sum(dim=1, keepdim=True).relu() * score
+            cam = torch.nn.functional.interpolate(
+                cam, size=(H, W), mode="bilinear")[0, 0]
+            cam = cam.detach().cpu().numpy()
+            full_cam = cam if full_cam is None else full_cam + cam
 
     if full_cam is None or full_cam.max() <= 0:
         return None

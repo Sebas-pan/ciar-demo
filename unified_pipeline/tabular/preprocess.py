@@ -14,7 +14,7 @@ def build_preprocessor(X_train):
         transformers.append((
             "num",
             Pipeline([
-                ("imputer", SimpleImputer(strategy="median")),
+                ("imputer", SimpleImputer(strategy="median")), #fills the missing values
                 ("scaler", StandardScaler()),
             ]),
             numeric_cols,
@@ -24,14 +24,14 @@ def build_preprocessor(X_train):
             "cat",
             Pipeline([
                 ("imputer", SimpleImputer(strategy="most_frequent")),
-                ("onehot", OneHotEncoder(handle_unknown="ignore")),
+                ("onehot", OneHotEncoder(handle_unknown="ignore")), #The unknown categoories will be None
             ]),
             categorical_cols,
         ))
 
     preprocessor = ColumnTransformer(
-        transformers=transformers,
-        remainder="drop",
+        transformers=transformers,  
+        remainder="drop", #non-specified columns will be dropped
         verbose_feature_names_out=False,
     )
     preprocessor.fit(X_train)

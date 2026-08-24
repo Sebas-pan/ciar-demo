@@ -23,6 +23,7 @@ model:
     augment: true
 
 xai:
+  narrative: true
   methods: [gradcam, occlusion, lime_image]
   gradcam:
     mode: max_detection        # max_detection | class

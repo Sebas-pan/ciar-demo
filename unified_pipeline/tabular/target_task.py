@@ -36,8 +36,10 @@ def resolve_target(df, target_cfg):
 def _detect_task(y):
     if (pd.api.types.is_object_dtype(y)  # text
             or pd.api.types.is_string_dtype(y)  # pandas 3.x usa dtype 'str'
-            or pd.api.types.is_categorical_dtype(y)  # Low/medium/high
-            or pd.api.types.is_bool_dtype(y)):
+            or pd.CategoricalDtype.is_dtype(y)  # pandas 3.x usa dtype 'categorical'◘
+            or pd.api.types.is_bool_dtype(y)
+            # or pd.api.types.is_categorical_dtype(y)  # Low/medium/high -> deprecated
+            ):
         return "classification"
     nunique = y.nunique(dropna=True)
     if nunique <= 10 and pd.api.types.is_integer_dtype(y):

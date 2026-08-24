@@ -1,8 +1,17 @@
+import json
 import os
 
 import numpy as np
 
 from ..io import write_json
+from .narrator import narrate_instance, narrate_model, narrate_top_features
+
+
+def _read_json(path):
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def build_report(model, task, X_test, y_test, class_names,
@@ -43,14 +52,38 @@ def build_report(model, task, X_test, y_test, class_names,
     return instances
 
 
-def write_report(instances, xai_dir, run_dir):
+def write_report(instances, xai_dir, run_dir, metrics=None, task=None,
+                 model_type=None, target=None, top_n=15, narrative=True):
     write_json(os.path.join(xai_dir, "explanatory_instances.json"), instances)
     lines = [
         "# Instancia explicativa",
         "",
     ]
+
+    if narrative:
+        lines.append("## ¿Qué está haciendo este modelo?")
+        lines.append("")
+        if metrics and task:
+            lines.append(narrate_model(metrics, task, model_type, target))
+            lines.append("")
+        fi_records = _read_json(os.path.join(xai_dir, "feature_importance.json"))
+        shap_records = _read_json(os.path.join(xai_dir, "shap_global.json"))
+        top = narrate_top_features(fi_records, shap_records, top_n=top_n)
+        if top:
+            lines.append(top)
+            lines.append("")
+
+        lines.append("## ¿Por qué el modelo predijo lo que predijo?")
+        lines.append("")
+        for rec in instances:
+            narrative_txt = narrate_instance(rec, task or "classification")
+            if narrative_txt:
+                lines.append("### Muestra (index {})".format(rec["index"]))
+                lines.append(narrative_txt)
+                lines.append("")
+
     for rec in instances:
-        lines.append("## Muestra (index {})".format(rec["index"]))
+        lines.append("## Detalle técnico — Muestra (index {})".format(rec["index"]))
         lines.append("- True: {} | Pred: {}".format(
             rec["true"], rec["prediction"]))
         if "probabilities" in rec:

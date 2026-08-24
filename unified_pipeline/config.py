@@ -18,6 +18,8 @@ DEFAULTS = {
         "lime": True,
         "num_features": 10,
         "num_instances": 3,
+        "narrative": True,
+        "top_features": 15,
     },
     "output": {"dir": "outputs", "save_model": True, "save_report": True},
 }

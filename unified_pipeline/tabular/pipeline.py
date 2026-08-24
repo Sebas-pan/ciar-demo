@@ -50,7 +50,7 @@ def run_tabular(cfg):
 
     metrics = evaluate(estimator, task, X_test_t, parts["y_test"])
     classes = (
-        [str(c) for c in estimator.classes_]
+        [str(c) for c in estimator.classes_] #take each class and convert it to string
         if task == "classification"
         else None
     )
@@ -141,7 +141,12 @@ def run_tabular(cfg):
         xai=xai,
     )
     if outputs.get("save_report", True):
-        write_report(instances, xai_dir, run_dir)
+        write_report(
+            instances, xai_dir, run_dir,
+            metrics=metrics, task=task, model_type=model_type, target=target,
+            top_n=int(xai_cfg.get("top_features", 15)),
+            narrative=bool(xai_cfg.get("narrative", True)),
+        )
 
     return {
         "data_type": "tabular",

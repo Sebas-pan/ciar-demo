@@ -28,6 +28,8 @@ xai:
   lime: true
   num_features: 10
   num_instances: 3
+  narrative: true
+  top_features: 15
 
 output:
   dir: "unified_pipeline/outputs"

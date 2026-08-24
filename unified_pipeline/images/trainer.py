@@ -2,14 +2,18 @@ import os
 
 
 def resolve_device(cfg):
-    """Devuelve str/número adecuado para ultralytics a partir de cfg['device']."""
+    """Devuelve str/número adecuado para ultralytics y torch a partir de cfg['device']."""
     import torch
 
     device = cfg["model"].get("device", "auto")
     if isinstance(device, str):
         device = device.strip().lower()
     if device in ("auto", "gpu", "best"):
-        return "0" if torch.cuda.is_available() else "cpu"
+        return 0 if torch.cuda.is_available() else "cpu"
+    if isinstance(device, str) and device.isdigit():
+        # '0' sirve para ultralytics pero NO para torch (`.to('0')` falla);
+        # normalizamos a int para que valga en ambos.
+        return int(device) if torch.cuda.is_available() else "cpu"
     return device
 
 

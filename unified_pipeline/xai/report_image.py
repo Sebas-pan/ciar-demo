@@ -1,10 +1,12 @@
 import os
 
 from ..io import write_json
+from .narrator import narrate_image
 
 
 def build_image_report(run_dir, metrics, names, variant, device,
-                       train_minutes, predictions, xai, xai_dir, eda, model_meta):
+                       train_minutes, predictions, xai, xai_dir, eda, model_meta,
+                       narrative=True):
     """Genera report.md de la rama imagen."""
     lines = ["# Reporte — Detección YOLO11", ""]
 
@@ -28,6 +30,12 @@ def build_image_report(run_dir, metrics, names, variant, device,
             "{:.4f}".format(vals["AP50-95"]) if vals.get("AP50-95") else "n/a",
         ))
     lines.append("")
+
+    if narrative:
+        text = narrate_image(metrics, names, predictions, xai)
+        if text:
+            lines.append(text)
+            lines.append("")
 
     lines.append("## Predicciones de ejemplo (`predictions/`)")
     for rec in predictions:
@@ -56,7 +64,7 @@ def build_image_report(run_dir, metrics, names, variant, device,
                     inst.get("class_name") or inst.get("top_label_name")))
         lines.append("")
 
-    lines.append("## Interpretación")
+    lines.append("## Cómo interpretar los mapas")
     lines.append("""- **Grad-CAM**: mapa de calor sobre la última conv de la rama de clases.
     Las zonas rojas muestran qué regiones **soportan** la clase detectada.
 - **Occlusion Sensitivity**: celda en gris → caída de confianza de la caja.

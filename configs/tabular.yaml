@@ -29,8 +29,22 @@ xai:
   lime: true
   num_features: 10
   num_instances: 3
+  narrative: true   # reporte estilo agente (explicaciones en lenguaje natural)
+  top_features: 15  # nº de características destacadas en la narrativa
 
 output:
   dir: "unified_pipeline/outputs"
   save_model: true
   save_report: true
+
+#Example of the merge function from the config.py
+#   override = {
+#     "split": {
+#         "random_state": 123
+#     },
+#     "model": {
+#         "params": {
+#             "max_depth": 20
+#         }
+#     }
+# }

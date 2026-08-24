@@ -143,6 +143,7 @@ def run_image(cfg):
             variant=variant, device=device, train_minutes=train_minutes,
             predictions=predictions, xai=xai, xai_dir=xai_dir,
             eda=eda_summary, model_meta=meta,
+            narrative=bool(xai_cfg.get("narrative", True)),
         )
 
     # limpiar temporales de XAI
