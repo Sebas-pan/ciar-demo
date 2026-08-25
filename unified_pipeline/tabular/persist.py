@@ -1,8 +1,9 @@
 def build_tabular_metadata(
     bundle, task, model_type, hyperparameters,
     feature_names, classes, metrics, split_cfg,
+    val_metrics=None,
 ):
-    return {
+    meta = {
         "version": "1.0",
         "data_type": "tabular",
         "framework": "sklearn",
@@ -16,3 +17,6 @@ def build_tabular_metadata(
         "source": bundle.source,
         "description": bundle.description,
     }
+    if val_metrics is not None:
+        meta["val_metrics"] = val_metrics
+    return meta

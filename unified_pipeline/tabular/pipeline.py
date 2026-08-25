@@ -31,19 +31,22 @@ def run_tabular(cfg):
     preprocessor, _, _ = build_preprocessor(parts["X_train"])
     X_train_t = preprocessor.transform(parts["X_train"])
     X_test_t = preprocessor.transform(parts["X_test"])
+    X_val_t = preprocessor.transform(parts["X_val"])
     feature_names = transformed_feature_names(preprocessor)
 
     model_cfg = cfg["model"]
     model_type = model_cfg.get("type", "random_forest")
     initial_params = model_cfg.get("params") or {}
     search = model_cfg.get("search")
-    estimator, best_params = train_estimator(
+    estimator, best_params, val_metrics = train_estimator(
         model_type=model_type,
         task=task,
         params=initial_params,
         search=search,
         X_train=X_train_t,
         y_train=parts["y_train"],
+        X_val=X_val_t,
+        y_val=parts["y_val"],
     )
     if best_params is None:
         best_params = initial_params
@@ -74,6 +77,7 @@ def run_tabular(cfg):
         classes=classes,
         metrics=metrics,
         split_cfg=split_cfg,
+        val_metrics=val_metrics,
     )
     if outputs.get("save_model", True):
         artifact_dir = os.path.join(run_dir, "model")
@@ -160,6 +164,7 @@ def run_tabular(cfg):
             "test": int(X_test_t.shape[0]),
         },
         "metrics": metrics,
+        "val_metrics": val_metrics,
         "xai": xai,
         "run_dir": run_dir,
         "validation": validation_report,
