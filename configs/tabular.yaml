@@ -31,6 +31,7 @@ xai:
   num_instances: 3
   narrative: true   # reporte estilo agente (explicaciones en lenguaje natural)
   top_features: 15  # nº de características destacadas en la narrativa
+  use_llm: true    # cambiar a true para usar LLM (dots-3-note-preview)
 
 output:
   dir: "unified_pipeline/outputs"

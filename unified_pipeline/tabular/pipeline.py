@@ -9,6 +9,8 @@ from ..xai.feature_importance import global_importance, plot_importance
 from ..xai.lime_local import run_lime
 from ..xai.report import build_report, write_report
 from ..xai.shap_local_global import run_shap
+from ..xai.llm_narrator import narrate_model as llm_narrate_model
+from ..xai.llm_narrator import narrate_top_features as llm_narrate_top_features
 from .eda import run_eda
 from .evaluate import evaluate
 from .persist import build_tabular_metadata
@@ -144,12 +146,24 @@ def run_tabular(cfg):
         num_instances=xai_cfg.get("num_instances", 3),
         xai=xai,
     )
+    # Narrator functions: LLM vs determinista
+    use_llm = xai_cfg.get("use_llm", False)
+    if use_llm:
+        # Wrap the LLM narrators so write_report can call them by name
+        _llm_narrate_model = lambda m, t, mt, tgt: llm_narrate_model(m, t, mt, tgt)
+        _llm_narrate_top = lambda fi, sh, n: llm_narrate_top_features(fi, sh, n)
+    else:
+        _llm_narrate_model = None
+        _llm_narrate_top = None
+
     if outputs.get("save_report", True):
         write_report(
             instances, xai_dir, run_dir,
             metrics=metrics, task=task, model_type=model_type, target=target,
             top_n=int(xai_cfg.get("top_features", 15)),
             narrative=bool(xai_cfg.get("narrative", True)),
+            narrate_model_func=_llm_narrate_model,
+            narrate_top_features_func=_llm_narrate_top,
         )
 
     return {

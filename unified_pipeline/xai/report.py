@@ -53,7 +53,8 @@ def build_report(model, task, X_test, y_test, class_names,
 
 
 def write_report(instances, xai_dir, run_dir, metrics=None, task=None,
-                 model_type=None, target=None, top_n=15, narrative=True):
+                 model_type=None, target=None, top_n=15, narrative=True,
+                 narrate_model_func=None, narrate_top_features_func=None):
     write_json(os.path.join(xai_dir, "explanatory_instances.json"), instances)
     lines = [
         "# Instancia explicativa",
@@ -64,11 +65,15 @@ def write_report(instances, xai_dir, run_dir, metrics=None, task=None,
         lines.append("## ¿Qué está haciendo este modelo?")
         lines.append("")
         if metrics and task:
-            lines.append(narrate_model(metrics, task, model_type, target))
+            # Usar la función pasada por parámetro o la importada por defecto
+            _narrate_model = (narrate_model_func or narrate_model)
+            lines.append(_narrate_model(metrics, task, model_type, target))
             lines.append("")
         fi_records = _read_json(os.path.join(xai_dir, "feature_importance.json"))
         shap_records = _read_json(os.path.join(xai_dir, "shap_global.json"))
-        top = narrate_top_features(fi_records, shap_records, top_n=top_n)
+        _narrate_top = (narrate_top_features_func or narrate_top_features)
+        top = _narrate_top(fi_records, shap_records, n=top_n)
+        # top = _narrate_top(fi_records, shap_records)
         if top:
             lines.append(top)
             lines.append("")

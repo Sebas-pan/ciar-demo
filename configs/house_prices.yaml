@@ -30,6 +30,7 @@ xai:
   num_instances: 3
   narrative: true
   top_features: 15
+  use_llm: true
 
 output:
   dir: "unified_pipeline/outputs"
