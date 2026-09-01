@@ -1,3 +1,9 @@
-#outputs
+# Outputs
 .unified_pipeline/outputs/
+
+# Environment variables
 .env
+
+# Python virtual environments
+.venv/
+venv/

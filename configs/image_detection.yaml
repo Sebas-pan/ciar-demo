@@ -10,7 +10,7 @@ model:
   variant: yolov11n            # n|s|m|l|x (configurable)
   device: "0"                  # "0" GPU, "cpu", o "auto"
   train:
-    epochs: 30
+    epochs: 150
     imgsz: 640
     batch: 16
     workers: 2
