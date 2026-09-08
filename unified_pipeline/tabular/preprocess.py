@@ -1,42 +1,4 @@
-import numpy as np
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer 
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+"""Shim — canonical implementation lives in tabular.common.preprocess."""
+from .common.preprocess import build_preprocessor, transformed_feature_names
 
-
-def build_preprocessor(X_train):
-    numeric_cols = X_train.select_dtypes(include=[np.number]).columns.tolist()
-    categorical_cols = X_train.select_dtypes(exclude=[np.number]).columns.tolist()
-
-    transformers = []
-    if numeric_cols:
-        transformers.append((
-            "num",
-            Pipeline([
-                ("imputer", SimpleImputer(strategy="median")), #fills the missing values
-                ("scaler", StandardScaler()),
-            ]),
-            numeric_cols,
-        ))
-    if categorical_cols:
-        transformers.append((
-            "cat",
-            Pipeline([
-                ("imputer", SimpleImputer(strategy="most_frequent")),
-                ("onehot", OneHotEncoder(handle_unknown="ignore")), #The unknown categoories will be None
-            ]),
-            categorical_cols,
-        ))
-
-    preprocessor = ColumnTransformer(
-        transformers=transformers,  
-        remainder="drop", #non-specified columns will be dropped
-        verbose_feature_names_out=False,
-    )
-    preprocessor.fit(X_train)
-    return preprocessor, numeric_cols, categorical_cols
-
-
-def transformed_feature_names(preprocessor):
-    return list(preprocessor.get_feature_names_out())
+__all__ = ["build_preprocessor", "transformed_feature_names"]

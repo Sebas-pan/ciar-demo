@@ -1,0 +1,38 @@
+data_type: auto
+
+data:
+  source: "unified_pipeline/data/Clustering/GENERAL.csv"
+  target: null
+  drop_columns: ["CUST_ID"]
+
+unsupervised:
+  task: k_means  # k_means | kmeans | k-means
+
+split:
+  train_val_test: [0.85, 0.0, 0.15]
+  stratify: false
+  random_state: 42
+
+model:
+  type: kmeans
+  params:
+    n_clusters: 4
+    n_init: 10
+    max_iter: 300
+    random_state: 42
+  search: null
+  # search example to auto-pick k:
+  # search:
+  #   n_clusters: [3, 4, 5, 6, 8]
+
+xai:
+  methods: [distance, contribution, permutation, prototype]
+  narrative: true          # include natural language report (deterministic or LLM)
+  top_features: 5
+  permutation_repeats: 5
+  use_llm: false           # set true to use OpenRouter LLM narrator (requires OPENROUTER_API_KEY)
+
+output:
+  dir: "unified_pipeline/outputs"
+  save_model: true
+  save_report: true

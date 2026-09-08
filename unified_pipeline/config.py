@@ -6,6 +6,7 @@ DEFAULTS = {
     "data_type": "auto",
     "data": {"source": None, "target": "auto", "drop_columns": []},
     "supervised": {"task": "auto"},
+    "unsupervised": {"task": None},
     "split": {
         "train_val_test": [0.7, 0.15, 0.15],
         "stratify": True,
@@ -20,6 +21,8 @@ DEFAULTS = {
         "num_instances": 3,
         "narrative": True,
         "top_features": 15,
+        "methods": None,
+        "permutation_repeats": 5,
     },
     "output": {"dir": "outputs", "save_model": True, "save_report": True},
 }

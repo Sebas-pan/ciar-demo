@@ -60,11 +60,15 @@ def load_dataset(cfg):
 
     drop_cols = cfg["data"].get("drop_columns") or []
     explicit_target = cfg["data"].get("target", "auto")
+    # Normalize explicit_target for unsupervised (None/null)
+    if explicit_target is None:
+        explicit_target = ""
     missing = [c for c in drop_cols if c not in bundle.df.columns]
     if missing:
         raise ValueError(
             "drop_columns not found in dataframe: {}".format(missing))
     if (explicit_target not in ("auto", "")
+            and explicit_target not in (None, "")
             and explicit_target in drop_cols):
         raise ValueError(
             "Target column '{}' cannot be dropped".format(explicit_target))

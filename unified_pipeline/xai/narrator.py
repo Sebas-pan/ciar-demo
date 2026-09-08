@@ -167,6 +167,80 @@ def narrate_instance(rec, task):
     return "\n".join(lines)
 
 
+def narrate_clustering(metrics, model_type="kmeans", n_features=None):
+    """Narrativa determinista para clustering — describe k, calidad y tamaños."""
+    n_c = metrics.get("n_clusters")
+    sil = metrics.get("silhouette")
+    inertia = metrics.get("inertia")
+    db = metrics.get("davies_bouldin")
+    ch = metrics.get("calinski_harabasz")
+    lines = []
+    if n_c:
+        feat_txt = f" sobre {n_features} variables" if n_features else ""
+        lines.append(
+            f"Este modelo es un **{model_type}** no supervisado que descubrió **{n_c} grupos**{feat_txt}."
+        )
+    if sil is not None:
+        try:
+            s = float(sil)
+            if s > 0.5:
+                qual = "muy bien separados — los grupos son compactos y distintos"
+            elif s > 0.25:
+                qual = "moderadamente separados — hay cierta superposición pero la estructura es válida"
+            elif s > 0.0:
+                qual = "débilmente separados — los grupos se solapan y la segmentación es exploratoria"
+            else:
+                qual = "sin separación clara — los datos no forman grupos naturales con este k"
+            lines.append(f"La silueta es **{s:.3f}** ({qual}; rango -1 a 1, mayor es mejor).")
+        except Exception:
+            pass
+    if inertia is not None:
+        lines.append(f"La inercia (suma de distancias cuadráticas al centroide) es **{float(inertia):,.1f}** — menor indica grupos más compactos.")
+    if db is not None:
+        lines.append(f"Davies-Bouldin = **{float(db):.3f}** (menor es mejor, mide solapamiento).")
+    if ch is not None:
+        lines.append(f"Calinski-Harabasz = **{float(ch):.1f}** (mayor es mejor, mide dispersión entre vs dentro).")
+    cs = metrics.get("cluster_sizes") or {}
+    if cs:
+        total = sum(cs.values()) or 1
+        parts = ", ".join(f"**C{c}**: {cnt} ({cnt/total:.1%})" for c, cnt in sorted(cs.items()))
+        lines.append(f"Tamaños: {parts}.")
+    if not lines:
+        return f"Modelo de clustering **{model_type}** entrenado."
+    return " ".join(lines)
+
+
+def narrate_cluster_profiles(centroids_json_path=None, centroids_data=None, top_k=3):
+    """Describe los prototipos (centroides) — qué distingue cada cluster."""
+    import json as _json
+    import os as _os
+    data = centroids_data
+    if data is None and centroids_json_path and _os.path.exists(centroids_json_path):
+        try:
+            with open(centroids_json_path, "r", encoding="utf-8") as fh:
+                data = _json.load(fh)
+        except Exception:
+            data = None
+    if not data:
+        return ""
+    # data is list of dicts with cluster + feature_scaled
+    try:
+        lines = ["## Perfiles de cada cluster (prototipos)", ""]
+        for rec in data:
+            c = rec.get("cluster", "?")
+            cnt = rec.get("count", "?")
+            # collect feature_scaled values
+            feats = [(k.replace("_scaled", ""), v) for k, v in rec.items() if k.endswith("_scaled")]
+            feats_sorted = sorted(feats, key=lambda t: -abs(t[1]))[:top_k]
+            top = ", ".join(f"**{f}** ({v:+.2f}σ)" for f, v in feats_sorted)
+            lines.append(f"- **Cluster {c}** (n={cnt}): se distingue por {top}.")
+        lines.append("")
+        lines.append("Valores en σ (desviaciones sobre la media escalada): positivo = por encima del promedio, negativo = por debajo.")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def narrate_image(metrics, names, predictions, xai):
     """Narrativa global y por imagen para la rama de detección."""
     lines = []

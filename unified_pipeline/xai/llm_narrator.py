@@ -92,6 +92,68 @@ def narrate_model(metrics, task, model_type, target=None):
     return det.narrate_model(metrics, task, model_type, target)
 
 
+def narrate_clustering(metrics, model_type="kmeans", n_features=None):
+    """Intenta LLM para clustering; fallback a narrator determinista."""
+    client = _get_client()
+    if client is not None:
+        try:
+            n_c = metrics.get("n_clusters", "?")
+            sil = metrics.get("silhouette")
+            sil_txt = f"silueta {sil:.3f}" if sil is not None else "silueta no disponible"
+            cs = metrics.get("cluster_sizes") or {}
+            sizes_txt = ", ".join(f"C{c}:{cnt}" for c, cnt in sorted(cs.items())) if cs else "tamaños variables"
+            feat_txt = f"sobre {n_features} variables" if n_features else ""
+            prompt = (
+                f"Eres un experto en clustering. Escribe un párrafo en español, máximo 4 oraciones, "
+                f"explicando un modelo {model_type} no supervisado {feat_txt} que encontró {n_c} grupos "
+                f"con {sil_txt} y distribución {sizes_txt}. "
+                f"Tono cercano para usuario no técnico, sin fórmulas, solo el texto."
+            )
+            response = client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = (response.choices[0].message.content or "").strip()
+            if text:
+                return text
+        except Exception:
+            pass
+    from . import narrator as det
+    return det.narrate_clustering(metrics, model_type, n_features)
+
+
+def narrate_cluster_profiles(centroids_json_path=None, centroids_data=None, top_k=3):
+    """LLM para perfiles de clusters; fallback determinista."""
+    client = _get_client()
+    if client is not None and centroids_data:
+        try:
+            # Build short feature highlights for prompt
+            highlights = []
+            for rec in centroids_data[:4]:
+                c = rec.get("cluster", "?")
+                feats = [(k.replace("_scaled", ""), v) for k, v in rec.items() if k.endswith("_scaled")]
+                top = sorted(feats, key=lambda t: -abs(t[1]))[:top_k]
+                top_txt = ", ".join(f"{f} ({v:+.2f})" for f, v in top)
+                highlights.append(f"Cluster {c}: {top_txt}")
+            prompt = (
+                f"Eres un experto en segmentación. En 3-4 oraciones en español, "
+                f"describe qué distingue cada grupo de clientes a partir de estos prototipos (valores en σ): "
+                f"{' | '.join(highlights)}. "
+                f"Usa lenguaje de negocio (ej. 'compradores intensivos', 'usuarios de efectivo'), tono cercano, solo texto."
+            )
+            response = client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = (response.choices[0].message.content or "").strip()
+            if text:
+                return text
+        except Exception:
+            pass
+    from . import narrator as det
+    return det.narrate_cluster_profiles(centroids_json_path, centroids_data, top_k)
+
+
 def narrate_top_features(
     feature_importance=None, shap_global=None, top_n=15
 ):
