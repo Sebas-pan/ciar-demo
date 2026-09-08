@@ -1,5 +1,6 @@
 # Outputs
 .unified_pipeline/outputs/runs/
+unified_pipeline/outputs/runs/
 
 # Environment variables
 .env
