@@ -1,0 +1,38 @@
+data_type: auto
+
+data:
+  source: "unified_pipeline/data/PetImages"
+  target: auto
+
+model:
+  type: resnet50
+  variant: resnet50            # resnet50 (torchvision ResNet50_Weights.IMAGENET1K_V2)
+  pretrained: true             # full fine-tune: all layers trainable
+  device: "0"                 # "0" | "cpu" | "auto"
+  train:
+    epochs: 30
+    imgsz: 224
+    batch: 32
+    workers: 4
+    optimizer: adamw           # adamw tuned for ResNet50
+    lr: 0.0003
+    patience: 7
+    seed: 42
+    augment: false             # per spec: no augmentation
+    label_smoothing: 0.1
+    predict_demo: 4
+    split: [0.7, 0.15, 0.15]  # for flat PetImages (Cat/Dog)
+
+xai:
+  narrative: true
+  use_llm: false
+  methods: [gradcam, occlusion]
+  gradcam:
+    layer: layer4
+  occlusion:
+    grid: [8, 8]
+
+output:
+  dir: "unified_pipeline/outputs"
+  save_model: true
+  save_report: true

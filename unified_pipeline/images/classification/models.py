@@ -1,4 +1,4 @@
-"""VGG16 classification model."""
+"""VGG16 / ResNet50 classification models."""
 import torch
 import torch.nn as nn
 
@@ -28,5 +28,33 @@ def create_vgg16(cfg, num_classes):
     return model
 
 
-def identify_model_type():
+def create_resnet50(cfg, num_classes):
+    from torchvision.models import resnet50, ResNet50_Weights
+    model_cfg = cfg.get("model", {})
+    pretrained = bool(model_cfg.get("pretrained", True))
+
+    weights = ResNet50_Weights.IMAGENET1K_V2 if pretrained else None
+    model = resnet50(weights=weights)
+
+    # Replace classifier head (full fine-tune: all params trainable)
+    in_features = model.fc.in_features
+    model.fc = nn.Linear(in_features, int(num_classes))
+    for p in model.parameters():
+        p.requires_grad = True
+    return model
+
+
+def create_classifier(cfg, num_classes):
+    """Generic factory — dispatches on model.type / variant."""
+    model_cfg = cfg.get("model", {})
+    key = str(model_cfg.get("type", model_cfg.get("variant", "vgg16"))).lower()
+    if key in ("resnet50", "resnet", "resnet-50", "resnet_50"):
+        return create_resnet50(cfg, num_classes)
+    return create_vgg16(cfg, num_classes)
+
+
+def identify_model_type(model_type="vgg16"):
+    key = str(model_type or "vgg16").lower()
+    if key in ("resnet50", "resnet", "resnet-50", "resnet_50"):
+        return "image_resnet_classification"
     return "image_vgg_classification"

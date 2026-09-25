@@ -94,7 +94,8 @@ def run_tabular(cfg):
 
     if xai_cfg.get("feature_importance", True):
         try:
-            table, method = global_importance(estimator, feature_names)
+            table, method = global_importance(
+                estimator, feature_names, X_test_t, parts["y_test"])
             plot_importance(
                 table, os.path.join(xai_dir, "feature_importance.png"))
             write_json(

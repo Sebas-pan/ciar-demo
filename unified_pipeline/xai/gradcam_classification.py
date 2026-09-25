@@ -1,4 +1,4 @@
-"""Grad-CAM for VGG16 classification."""
+"""Grad-CAM for image classification (VGG16 / ResNet50)."""
 import os
 import cv2
 import numpy as np
@@ -16,8 +16,10 @@ def run_gradcam_classification(cfg, model, image_paths, out_dir, names=None):
     if isinstance(device_str, str) and device_str.isdigit():
         device_str = f"cuda:{device_str}" if torch.cuda.is_available() else "cpu"
     device = torch.device(device_str if isinstance(device_str, str) else "cpu")
-    # Resolve target layer
-    layer_name = (cfg.get("xai",{}).get("gradcam",{}).get("layer") or "features.28")
+    # Resolve target layer (default depends on architecture)
+    is_resnet = hasattr(model, "layer4")
+    default_layer = "layer4" if is_resnet else "features.28"
+    layer_name = (cfg.get("xai",{}).get("gradcam",{}).get("layer") or default_layer)
     # Hook
     features = {}
     gradients = {}
@@ -26,9 +28,19 @@ def run_gradcam_classification(cfg, model, image_paths, out_dir, names=None):
     def backward_hook(m, grad_in, grad_out):
         gradients["value"] = grad_out[0]
 
-    # Navigate to layer: features.28
+    # Navigate to layer: VGG `features.28`, ResNet `layer4[-1]`
     try:
-        target_layer = model.features[28] if hasattr(model, "features") else list(model.children())[-2]
+        if hasattr(model, "layer4") and ("layer4" in str(layer_name)):
+            # last bottleneck block of layer4 (Sequential)
+            target_layer = model.layer4[-1]
+        elif hasattr(model, "features"):
+            try:
+                idx = int(str(layer_name).split(".")[-1])
+            except ValueError:
+                idx = 28
+            target_layer = model.features[idx]
+        else:
+            target_layer = list(model.children())[-2]
     except Exception:
         target_layer = list(model.modules())[-2]
 

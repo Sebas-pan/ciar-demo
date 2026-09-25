@@ -38,7 +38,8 @@ class _ImageDataset(Dataset):
 
 
 def run_training_classification(cfg, model, bundles, run_dir):
-    """Train VGG16 and save best checkpoint to run_dir/train/weights/best.pt"""
+    """Train VGG16/ResNet50 classifier and save best checkpoint to run_dir/train/weights/best.pt"""
+    model_tag = str(cfg.get("model", {}).get("type", "classifier")).upper()
     train_cfg = cfg["model"].get("train", {})
     epochs = int(train_cfg.get("epochs", 30))
     batch = int(train_cfg.get("batch", 32))
@@ -64,11 +65,11 @@ def run_training_classification(cfg, model, bundles, run_dir):
         if device.type == "cuda" and torch.cuda.is_available():
             dev_name = torch.cuda.get_device_name(device)
             mem_gb = torch.cuda.get_device_properties(device).total_memory / 1e9
-            print(f"[VGG16] Using device: {device} ({dev_name}, {mem_gb:.1f}GB) | CUDA available: True")
+            print(f"[{model_tag}] Using device: {device} ({dev_name}, {mem_gb:.1f}GB) | CUDA available: True")
         else:
-            print(f"[VGG16] Using device: {device} (CPU) | CUDA available: {torch.cuda.is_available()} | cfg device: {raw_device}")
+            print(f"[{model_tag}] Using device: {device} (CPU) | CUDA available: {torch.cuda.is_available()} | cfg device: {raw_device}")
     except Exception:
-        print(f"[VGG16] Using device: {device} | CUDA available: {torch.cuda.is_available()}")
+        print(f"[{model_tag}] Using device: {device} | CUDA available: {torch.cuda.is_available()}")
 
     torch.manual_seed(seed)
     if device.type == "cuda":
@@ -102,7 +103,7 @@ def run_training_classification(cfg, model, bundles, run_dir):
 
     # tqdm: outer epoch bar, disable if not a tty
     use_tqdm = sys.stdout.isatty()
-    epoch_pbar = tqdm(range(epochs), desc="VGG16 epochs", unit="epoch", ncols=100, disable=not use_tqdm)
+    epoch_pbar = tqdm(range(epochs), desc=f"{model_tag} epochs", unit="epoch", ncols=100, disable=not use_tqdm)
 
     for epoch in epoch_pbar:
         model.train()

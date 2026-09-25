@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-def global_importance(model, feature_names):
+def global_importance(model, feature_names, X=None, y=None):
     if hasattr(model, "feature_importances_"):
         values = model.feature_importances_
         method = "feature_importances_"
@@ -14,8 +14,18 @@ def global_importance(model, feature_names):
         values = abs(coef[0]) if coef.ndim > 1 else abs(coef)
         method = "abs(coef_)"
     else:
-        raise ValueError(
-            "Model does not expose feature importance or coefficients")
+        # Fallback for models without native importance (e.g. SVM RBF,
+        # CalibratedClassifierCV(SVC)): permutation importance on held-out data.
+        if X is None or y is None:
+            raise ValueError(
+                "Model does not expose feature importance or coefficients "
+                "(pass X, y for permutation fallback)")
+        from sklearn.inspection import permutation_importance
+
+        r = permutation_importance(
+            model, X, y, n_repeats=10, random_state=42, n_jobs=-1)
+        values = r.importances_mean
+        method = "permutation"
     table = pd.DataFrame({
         "feature": feature_names,
         "importance": values,

@@ -7,3 +7,14 @@ unified_pipeline/outputs/runs/
 # Python virtual environments
 .venv/
 venv/
+
+unified_pipeline/data/CatsDogs_YOLO11/
+unified_pipeline/data/Clustering/
+unified_pipeline/data/house_prices/
+unified_pipeline/data/PetImages/
+
+configs/models/
+
+unified_pipeline/weights/
+
+weights/

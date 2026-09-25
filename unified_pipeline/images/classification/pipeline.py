@@ -1,4 +1,4 @@
-"""Classification pipeline for VGG16 on PetImages."""
+"""Classification pipeline for VGG16 / ResNet50 on PetImages."""
 import datetime
 import os
 import shutil
@@ -6,7 +6,7 @@ import shutil
 from ...data.image_classification_loader import build_classification_spec, load_classification_dataset
 from ...io import write_json
 from ..common.device import resolve_device
-from .models import create_vgg16, identify_model_type
+from .models import create_vgg16, create_resnet50, create_classifier, identify_model_type
 from .trainer import run_training_classification
 from .evaluate import run_evaluation_classification
 from .persist import build_classification_metadata
@@ -40,7 +40,8 @@ def run_classification(cfg):
     eda_summary = run_eda_classification(bundles, eda_dir)
 
     # Model
-    model = create_vgg16(cfg, num_classes=nc)
+    model = create_classifier(cfg, num_classes=nc)
+    tag = str(model_type or variant or "classifier").upper()
     raw_device = model_cfg.get("device", "auto")
     device = resolve_device(cfg)
     # Banner: show if CUDA or CPU before training
@@ -54,11 +55,11 @@ def run_classification(cfg):
         # Normalize device for summary (cuda:0 vs 0)
         device = _dev_obj
         if _dev_obj.type == "cuda" and torch.cuda.is_available():
-            print(f"[VGG16] Using device: {_dev_obj} ({torch.cuda.get_device_name(_dev_obj)}) | cfg device: {raw_device}")
+            print(f"[{tag}] Using device: {_dev_obj} ({torch.cuda.get_device_name(_dev_obj)}) | cfg device: {raw_device}")
         else:
-            print(f"[VGG16] Using device: {_dev_obj} (CPU) | cfg device: {raw_device} | CUDA available: {torch.cuda.is_available()}")
+            print(f"[{tag}] Using device: {_dev_obj} (CPU) | cfg device: {raw_device} | CUDA available: {torch.cuda.is_available()}")
     except Exception as _e:
-        print(f"[VGG16] Using device: {device} | cfg device: {raw_device} (banner error: {_e})")
+        print(f"[{tag}] Using device: {device} | cfg device: {raw_device} (banner error: {_e})")
     train_cfg = model_cfg.get("train", {})
 
     t0 = datetime.datetime.now()
@@ -83,7 +84,7 @@ def run_classification(cfg):
         metrics=metrics, train_cfg=train_cfg, device=device, source=dataset_dir, model_type=model_type
     )
     meta["model_path"] = "best.pt"
-    meta["identify"] = identify_model_type()
+    meta["identify"] = identify_model_type(model_type)
     meta["run_seconds_train"] = round(train_minutes*60,1)
     write_json(os.path.join(run_dir, "model", "metadata.json"), meta)
 
@@ -121,7 +122,7 @@ def run_classification(cfg):
 
     # Report
     if outputs.get("save_report", True):
-        _build_classification_report(run_dir, metrics, names, variant, device, train_minutes, predictions, xai, xai_dir, eda_summary, meta, narrative=bool(xai_cfg.get("narrative", True)))
+        _build_classification_report(run_dir, metrics, names, variant, device, train_minutes, predictions, xai, xai_dir, eda_summary, meta, narrative=bool(xai_cfg.get("narrative", True)), model_label=f"{model_type} ({variant})")
 
     # Normalize split_shapes to train/val/test (valid -> val)
     raw_splits = {b.split: len(b.images) for b in bundles}
@@ -146,7 +147,7 @@ def run_classification(cfg):
     }
 
 
-def _build_classification_report(run_dir, metrics, names, variant, device, train_minutes, predictions, xai, xai_dir, eda, model_meta, narrative=True):
+def _build_classification_report(run_dir, metrics, names, variant, device, train_minutes, predictions, xai, xai_dir, eda, model_meta, narrative=True, model_label=None):
     from ...xai.narrator import narrate_image as det_narrate_image
     # For classification, craft simple markdown
     try:
@@ -164,7 +165,7 @@ def _build_classification_report(run_dir, metrics, names, variant, device, train
                     pass
     except Exception:
         dev_str = str(device)
-    lines = [f"# Image Classification Report — VGG16 ({variant})", f"*Device: {dev_str}*", ""]
+    lines = [f"# Image Classification Report — {model_label or f'VGG16 ({variant})'}", f"*Device: {dev_str}*", ""]
     if narrative:
         lines.append("## What the model did")
         acc = metrics.get("accuracy")

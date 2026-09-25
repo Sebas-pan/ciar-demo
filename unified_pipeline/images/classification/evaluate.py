@@ -29,13 +29,14 @@ def run_evaluation_classification(cfg, model, bundles, out_dir):
     test_ds = _ImageDataset(test_bundle, get_transforms(imgsz, augment=False, is_train=False))
     test_loader = DataLoader(test_ds, batch_size=batch, shuffle=False, num_workers=workers)
 
+    model_tag = str(cfg.get("model", {}).get("type", "classifier")).upper()
     model = model.to(device)
     # Device banner for eval
     try:
         dev_name = torch.cuda.get_device_name(device) if device.type == "cuda" and torch.cuda.is_available() else "CPU"
-        print(f"[VGG16][Eval] Using device: {device} ({dev_name})")
+        print(f"[{model_tag}][Eval] Using device: {device} ({dev_name})")
     except Exception:
-        print(f"[VGG16][Eval] Using device: {device}")
+        print(f"[{model_tag}][Eval] Using device: {device}")
     model.eval()
     y_true = []
     y_pred = []

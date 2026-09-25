@@ -1,0 +1,34 @@
+data_type: auto
+
+data:
+  source: "sklearn:breast_cancer"
+  target: auto
+
+supervised:
+  task: classification  # classification | regression | auto
+
+split:
+  train_val_test: [0.7, 0.15, 0.15]
+  stratify: true
+  random_state: 42
+
+model:
+  type: decision_tree
+  params:
+    random_state: 42
+  search: null
+
+xai:
+  feature_importance: true  # feature_importances_
+  shap: true                # TreeExplainer (fast path)
+  lime: true                # predict_proba
+  num_features: 10
+  num_instances: 3
+  narrative: true
+  top_features: 15
+  use_llm: true
+
+output:
+  dir: "unified_pipeline/outputs"
+  save_model: true
+  save_report: true

@@ -21,11 +21,21 @@ def is_tree_based(model):
         DecisionTreeRegressor,
     )
 
-    return isinstance(
+    if isinstance(
         model,
         (RandomForestClassifier, RandomForestRegressor,
          DecisionTreeClassifier, DecisionTreeRegressor),
-    )
+    ):
+        return True
+    # XGBoost models use the fast TreeExplainer path when installed.
+    try:
+        import xgboost as _xgb
+
+        if isinstance(model, (_xgb.XGBClassifier, _xgb.XGBRegressor)):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def run_shap(model, X_train, X_test, feature_names, out_dir,
