@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "CIAR — Unified Train + Explain Pipeline",
+    "output": ".archify/architecture-ciar-20260929-120000/ciar-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/CIAR-Proyectos/Explicabilidad.git",
+      "revision": "6e503aa27ddf67a343362cbe7635da8c5314e6d1",
+      "link_mode": "web"
+    }
+  },
+  "components": [
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "CLI Entry Point",
+      "sublabel": "python -m unified_pipeline run",
+      "pos": [420, 120],
+      "size": [180, 56],
+      "sources": [
+        { "path": "unified_pipeline/cli.py", "line": 1, "end_line": 94, "label": "main(argv) — argparse + dispatch" }
+      ]
+    },
+    {
+      "id": "config",
+      "type": "backend",
+      "label": "Config Loader",
+      "sublabel": "YAML + DEFAULTS deep-merge",
+      "pos": [200, 220],
+      "size": [180, 56],
+      "sources": [
+        { "path": "unified_pipeline/config.py", "line": 1, "end_line": 50, "label": "load_config() — recursive merge" }
+      ]
+    },
+    {
+      "id": "dispatcher",
+      "type": "backend",
+      "label": "Branch Dispatcher",
+      "sublabel": "detect_data_type + routing",
+      "pos": [640, 220],
+      "size": [180, 56],
+      "sources": [
+        { "path": "unified_pipeline/data/type_detector.py", "line": 1, "end_line": 17, "label": "detect_data_type(source)" },
+        { "path": "unified_pipeline/cli.py", "line": 50, "end_line": 94, "label": "dispatch logic" }
+      ]
+    },
+    {
+      "id": "tabular_sup",
+      "type": "backend",
+      "label": "Tabular Supervised",
+      "sublabel": "sklearn classification / regression",
+      "pos": [80, 340],
+      "size": [200, 64],
+      "sources": [
+        { "path": "unified_pipeline/tabular/supervised/pipeline.py", "line": 1, "end_line": 80, "label": "run_tabular(cfg)" }
+      ]
+    },
+    {
+      "id": "tabular_unsup",
+      "type": "backend",
+      "label": "Tabular Unsupervised",
+      "sublabel": "K-Means clustering",
+      "pos": [320, 340],
+      "size": [200, 64],
+      "sources": [
+        { "path": "unified_pipeline/tabular/unsupervised/pipeline.py", "line": 1, "end_line": 80, "label": "run_clustering(cfg)" }
+      ]
+    },
+    {
+      "id": "img_detection",
+      "type": "backend",
+      "label": "Image Detection",
+      "sublabel": "YOLO11 / YOLO26 / YOLOv8",
+      "pos": [560, 340],
+      "size": [200, 64],
+      "sources": [
+        { "path": "unified_pipeline/images/detection/pipeline.py", "line": 1, "end_line": 80, "label": "run_image(cfg)" }
+      ]
+    },
+    {
+      "id": "img_classification",
+      "type": "backend",
+      "label": "Image Classification",
+      "sublabel": "torchvision CNN / ViT",
+      "pos": [800, 340],
+      "size": [200, 64],
+      "sources": [
+        { "path": "unified_pipeline/images/classification/pipeline.py", "line": 1, "end_line": 80, "label": "run_classification(cfg)" }
+      ]
+    },
+    {
+      "id": "xai",
+      "type": "backend",
+      "label": "XAI Engine",
+      "sublabel": "SHAP · LIME · Grad-CAM · Occlusion",
+      "pos": [420, 470],
+      "size": [200, 64],
+      "sources": [
+        { "path": "unified_pipeline/xai/shap_local_global.py", "line": 1, "end_line": 50, "label": "run_shap()" },
+        { "path": "unified_pipeline/xai/lime_local.py", "line": 1, "end_line": 40, "label": "run_lime()" },
+        { "path": "unified_pipeline/xai/gradcam_image.py", "line": 1, "end_line": 60, "label": "run_gradcam()" }
+      ]
+    },
+    {
+      "id": "model_store",
+      "type": "database",
+      "label": "Model Store",
+      "sublabel": "model.pkl + preprocessor.pkl + metadata.json",
+      "pos": [200, 590],
+      "size": [180, 56],
+      "sources": [
+        { "path": "unified_pipeline/modelstore.py", "line": 1, "end_line": 18, "label": "save_artifact()" }
+      ]
+    },
+    {
+      "id": "datasets",
+      "type": "external",
+      "label": "Datasets",
+      "sublabel": "sklearn · CSV · YOLO · Image folders",
+      "pos": [80, 30],
+      "size": [160, 56],
+      "sources": [
+        { "path": "unified_pipeline/data/loader.py", "line": 1, "end_line": 50, "label": "load_dataset()" },
+        { "path": "unified_pipeline/data/image_loader.py", "line": 1, "end_line": 60, "label": "build_yolo_data_spec()" }
+      ]
+    },
+    {
+      "id": "outputs",
+      "type": "external",
+      "label": "Run Outputs",
+      "sublabel": "report.md · predictions · metrics",
+      "pos": [640, 590],
+      "size": [180, 56],
+      "sources": [
+        { "path": "unified_pipeline/xai/report.py", "line": 1, "end_line": 50, "label": "write_report()" },
+        { "path": "unified_pipeline/xai/report_image.py", "line": 1, "end_line": 50, "label": "build_image_report()" }
+      ]
+    },
+    {
+      "id": "openrouter",
+      "type": "cloud",
+      "label": "OpenRouter API",
+      "sublabel": "LLM narration (optional)",
+      "pos": [1060, 470],
+      "size": [140, 56],
+      "sources": [
+        { "path": "unified_pipeline/xai/llm_narrator.py", "line": 1, "end_line": 50, "label": "LLM narrative with fallback" }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "unified_pipeline package",
+      "wraps": ["cli", "config", "dispatcher", "tabular_sup", "tabular_unsup", "img_detection", "img_classification", "xai", "model_store"]
+    }
+  ],
+  "connections": [
+    { "id": "datasets-to-cli", "from": "datasets", "to": "cli", "label": "data source" },
+    { "id": "cli-to-config", "from": "cli", "to": "config", "label": "load YAML" },
+    { "id": "cli-to-dispatcher", "from": "cli", "to": "dispatcher", "label": "merged config" },
+    { "id": "config-to-dispatcher", "from": "config", "to": "dispatcher", "label": "deep-merged" },
+    { "id": "dispatch-to-tab-sup", "from": "dispatcher", "to": "tabular_sup", "label": "tabular" },
+    { "id": "dispatch-to-tab-unsup", "from": "dispatcher", "to": "tabular_unsup", "label": "unsupervised" },
+    { "id": "dispatch-to-img-det", "from": "dispatcher", "to": "img_detection", "label": "yolo*" },
+    { "id": "dispatch-to-img-cls", "from": "dispatcher", "to": "img_classification", "label": "cnn/vit" },
+    { "id": "tab-sup-to-xai", "from": "tabular_sup", "to": "xai", "label": "explain" },
+    { "id": "tab-unsup-to-xai", "from": "tabular_unsup", "to": "xai", "label": "explain" },
+    { "id": "img-det-to-xai", "from": "img_detection", "to": "xai", "label": "explain" },
+    { "id": "img-cls-to-xai", "from": "img_classification", "to": "xai", "label": "explain" },
+    { "id": "xai-to-outputs", "from": "xai", "to": "outputs", "label": "report.md" },
+    { "id": "tab-sup-to-store", "from": "tabular_sup", "to": "model_store", "label": "save" },
+    { "id": "tab-unsup-to-store", "from": "tabular_unsup", "to": "model_store", "label": "save" },
+    { "id": "img-det-to-store", "from": "img_detection", "to": "model_store", "label": "save" },
+    { "id": "img-cls-to-store", "from": "img_classification", "to": "model_store", "label": "save" },
+    { "id": "store-to-outputs", "from": "model_store", "to": "outputs", "label": "metadata" },
+    { "id": "openrouter-to-xai", "from": "openrouter", "to": "xai", "label": "LLM narrative" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "XAI Methods",
+      "items": [
+        "Tabular: SHAP (Tree/Kernel), LIME, feature importance",
+        "Image detection: Grad-CAM, Occlusion, LIME-Image",
+        "Image classification: Grad-CAM, Occlusion",
+        "Clustering: distance, contribution, permutation, prototype"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Output Artifacts",
+      "items": [
+        "model.pkl + preprocessor.pkl + metadata.json",
+        "report.md with deterministic or LLM narrative",
+        "predictions.json + annotated images",
+        "metrics.json + confusion matrix + curves"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Key Design Patterns",
+      "items": [
+        "Two-level dispatch: CLI routes tabular/image, then detection/classification",
+        "Config deep-merge: partial YAML over DEFAULTS",
+        "Detection Grad-CAM: confidence-weighted activation (no backward pass)",
+        "LLM narrator: deterministic fallback, identical function signatures"
+      ]
+    }
+  ]
+}

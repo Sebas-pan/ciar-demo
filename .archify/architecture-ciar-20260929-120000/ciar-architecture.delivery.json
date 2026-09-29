@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "53559a74-ccb8-451a-97fd-56f668dce3b0",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "C:\\Users\\Fabrizio\\Desktop\\CIAR\\.archify\\architecture-ciar-20260929-120000\\candidate.json",
+  "output": "C:\\Users\\Fabrizio\\Desktop\\CIAR\\.archify\\architecture-ciar-20260929-120000\\ciar-architecture.html",
+  "specification": {
+    "sha256": "e1a4a330d28429a684db2a7364e0ff3bb9a67bee489b87b8acba09ad26bf8632",
+    "bytes": 8325
+  },
+  "artifact": {
+    "sha256": "85bd7017d422602ea8de42263bbdc1eaa7ec5c5759dcd1351bbdef16009b651b",
+    "bytes": 782722
+  }
+}
