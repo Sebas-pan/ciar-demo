@@ -17,8 +17,7 @@ def run_gradcam_classification(cfg, model, image_paths, out_dir, names=None):
         device_str = f"cuda:{device_str}" if torch.cuda.is_available() else "cpu"
     device = torch.device(device_str if isinstance(device_str, str) else "cpu")
     # Resolve target layer (default depends on architecture)
-    is_resnet = hasattr(model, "layer4")
-    default_layer = "layer4" if is_resnet else "features.28"
+    default_layer = _default_gradcam_layer(model)
     layer_name = (cfg.get("xai",{}).get("gradcam",{}).get("layer") or default_layer)
     # Hook
     features = {}
@@ -28,19 +27,10 @@ def run_gradcam_classification(cfg, model, image_paths, out_dir, names=None):
     def backward_hook(m, grad_in, grad_out):
         gradients["value"] = grad_out[0]
 
-    # Navigate to layer: VGG `features.28`, ResNet `layer4[-1]`
+    # Navigate to layer across architectures (VGG/ResNet/EfficientNet/
+    # MobileNet/DenseNet/ViT/Swin/ConvNeXt + explicit dotted-path override).
     try:
-        if hasattr(model, "layer4") and ("layer4" in str(layer_name)):
-            # last bottleneck block of layer4 (Sequential)
-            target_layer = model.layer4[-1]
-        elif hasattr(model, "features"):
-            try:
-                idx = int(str(layer_name).split(".")[-1])
-            except ValueError:
-                idx = 28
-            target_layer = model.features[idx]
-        else:
-            target_layer = list(model.children())[-2]
+        target_layer = _resolve_gradcam_layer(model, layer_name)
     except Exception:
         target_layer = list(model.modules())[-2]
 
@@ -69,10 +59,9 @@ def run_gradcam_classification(cfg, model, image_paths, out_dir, names=None):
             score = out[0, pred_idx]
             score.backward()
 
-            grad = gradients["value"].detach()  # (1, C, H, W)
+            grad = gradients["value"].detach()
             fmap = features["value"].detach()
-            weights = grad.mean(dim=(2,3), keepdim=True)  # (1, C, 1, 1)
-            cam = (weights * fmap).sum(dim=1).squeeze(0).cpu().numpy()
+            cam = _build_cam(grad, fmap)
             cam = np.maximum(cam, 0)
             cam = cv2.resize(cam, (orig.shape[1], orig.shape[0]))
             cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
@@ -87,3 +76,123 @@ def run_gradcam_classification(cfg, model, image_paths, out_dir, names=None):
     h1.remove()
     h2.remove()
     return {"instances": instances, "layer": layer_name}
+
+
+def _build_cam(grad, fmap):
+    """Build 2D CAM from CNN (B,C,H,W) or transformer (B,T,C) tensors."""
+    import math
+    if grad.ndim == 4 and fmap.ndim == 4:
+        weights = grad.mean(dim=(2, 3), keepdim=True)  # (1, C, 1, 1)
+        return (weights * fmap).sum(dim=1).squeeze(0).cpu().numpy()
+    if grad.ndim == 3 and fmap.ndim == 3:
+        # ViT/Swin tokens: drop CLS token, reshape patch grid to 2D.
+        weights = grad.mean(dim=1, keepdim=True)  # (1, 1, C)
+        tok = (weights * fmap).sum(dim=-1).squeeze(0)  # (T,)
+        toks = tok[1:] if tok.numel() > 1 else tok
+        side = int(math.sqrt(float(toks.numel())))
+        if side * side != toks.numel():
+            side = int(math.ceil(math.sqrt(float(toks.numel()))))
+            pad = side * side - toks.numel()
+            if pad > 0:
+                import torch as _t
+                toks = _t.cat([toks, toks[-1:].repeat(pad)])
+        return toks.reshape(side, side).cpu().numpy()
+    # Fallback: squeeze whatever we got to 2D
+    arr = fmap.squeeze(0).cpu().numpy()
+    while arr.ndim > 2:
+        arr = arr.mean(axis=0)
+    return arr
+
+
+def _default_gradcam_layer(model):
+    # ResNet family
+    if hasattr(model, "layer4"):
+        return "layer4"
+    cls = type(model).__name__.lower()
+    # DenseNet: last dense block
+    if hasattr(model, "features") and hasattr(getattr(model, "features", None), "denseblock4"):
+        return "features.denseblock4"
+    # Vision Transformer: last encoder MLP (diffuse — occlusion is primary)
+    if hasattr(model, "encoder"):
+        return "encoder.layers.encoder_layer_11"
+    # EfficientNet / MobileNet / ConvNeXt / Swin: last feature block
+    if hasattr(model, "features"):
+        try:
+            return "features.-1"
+        except Exception:
+            pass
+    if "vgg" in cls:
+        return "features.28"
+    return "features.-1"
+
+
+def _resolve_gradcam_layer(model, layer_name):
+    name = str(layer_name or "")
+    # 1. Explicit dotted path, e.g. "features.8", "features.denseblock4",
+    #    "encoder.layers.encoder_layer_11", "layer4".
+    if "." in name or name in ("features", "layer4", "encoder"):
+        try:
+            return _walk_attr(model, name)
+        except Exception:
+            pass
+    # 2. Architecture fallbacks
+    if hasattr(model, "layer4") and "layer4" in name:
+        try:
+            return model.layer4[-1]
+        except Exception:
+            return model.layer4
+    if hasattr(model, "features"):
+        feats = model.features
+        # DenseNet denseblock
+        if hasattr(feats, "denseblock4") and "dense" in name:
+            block = feats.denseblock4
+            try:
+                return block[-1]
+            except Exception:
+                return block
+        # Numeric index: "features.28" / "features.-1" / "28"
+        tail = name.split(".")[-1]
+        try:
+            idx = int(tail)
+            return feats[idx]
+        except (ValueError, IndexError, TypeError):
+            pass
+        # Last block fallback for EfficientNet/MobileNet/Swin/ConvNeXt
+        try:
+            return feats[-1]
+        except Exception:
+            pass
+    if hasattr(model, "encoder"):
+        try:
+            layers = model.encoder.layers
+            last = layers[-1]
+            # Prefer the MLP sub-block output for CAM
+            if hasattr(last, "mlp"):
+                return last.mlp
+            return last
+        except Exception:
+            pass
+    return list(model.children())[-2]
+
+
+def _walk_attr(root, dotted):
+    cur = root
+    for part in str(dotted).split("."):
+        if part == "-1" or part == "[-1]":
+            cur = cur[-1]
+            continue
+        if part.endswith("]") and "[" in part:
+            attr, idx_txt = part[:-1].split("[", 1)
+            if attr:
+                cur = getattr(cur, attr)
+            cur = cur[int(idx_txt)]
+            continue
+        try:
+            cur = getattr(cur, part)
+            continue
+        except AttributeError:
+            pass
+        # numeric index into Sequential/ModuleList
+        cur = cur[int(part)]
+    # Unwrap trailing Sequential single block (e.g. ResNet layer4[-1])
+    return cur

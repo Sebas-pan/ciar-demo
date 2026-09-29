@@ -1,0 +1,39 @@
+data_type: auto
+
+data:
+  source: "unified_pipeline/data/PetImages"
+  target: auto
+
+model:
+  type: vit_b_16
+  variant: vit_b_16           # ViT_B_16_Weights.IMAGENET1K_V1
+  pretrained: true
+  device: "0"
+  train:
+    epochs: 30
+    imgsz: 224
+    batch: 16                # VRAM fallback per approval (was 32)
+    workers: 4
+    optimizer: adamw
+    lr: 0.0003
+    patience: 7
+    seed: 42
+    augment: false
+    label_smoothing: 0.1
+    predict_demo: 4
+    split: [0.7, 0.15, 0.15]
+
+xai:
+  narrative: true
+  use_llm: false
+  # NOTE: ViT GradCAM is diffuse — occlusion is the primary explainer.
+  methods: [gradcam, occlusion]
+  gradcam:
+    layer: encoder.layers.encoder_layer_11
+  occlusion:
+    grid: [8, 8]
+
+output:
+  dir: "unified_pipeline/outputs"
+  save_model: true
+  save_report: true

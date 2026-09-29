@@ -1,0 +1,38 @@
+data_type: auto
+
+data:
+  source: "unified_pipeline/data/PetImages"
+  target: auto
+
+model:
+  type: resnet18
+  variant: resnet18           # torchvision ResNet18_Weights.IMAGENET1K_V1
+  pretrained: true
+  device: "0"                # "0" | "cpu" | "auto"
+  train:
+    epochs: 30
+    imgsz: 224
+    batch: 32
+    workers: 4
+    optimizer: adam
+    lr: 0.0001
+    patience: 5
+    seed: 42
+    augment: false
+    label_smoothing: 0.0
+    predict_demo: 4
+    split: [0.7, 0.15, 0.15]
+
+xai:
+  narrative: true
+  use_llm: false
+  methods: [gradcam, occlusion]
+  gradcam:
+    layer: layer4
+  occlusion:
+    grid: [8, 8]
+
+output:
+  dir: "unified_pipeline/outputs"
+  save_model: true
+  save_report: true

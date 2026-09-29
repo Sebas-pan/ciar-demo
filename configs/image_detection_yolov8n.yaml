@@ -1,0 +1,43 @@
+data_type: auto
+
+data:
+  # Carpetas train/valid/test con images/ y labels/ (formato YOLO detection)
+  source: "unified_pipeline/data/CatsDogs_YOLO11"
+  target: auto
+
+model:
+  type: yolov8
+  variant: yolov8n              # YOLOv8 baseline vs YOLO11n
+  device: "0"
+  train:
+    epochs: 150
+    imgsz: 640
+    batch: 16
+    workers: 2
+    optimizer: auto
+    patience: 15
+    seed: 42
+    conf: 0.25
+    iou: 0.5
+    predict_demo: 4
+    augment: true
+
+xai:
+  narrative: true
+  methods: [gradcam, occlusion, lime_image]
+  gradcam:
+    mode: max_detection
+    min_conf: 0.25
+  occlusion:
+    grid: [8, 8]
+    fill: gray
+    min_conf: 0.25
+  lime_image:
+    num_samples: 500
+    num_features: 10
+    min_conf: 0.25
+
+output:
+  dir: "unified_pipeline/outputs"
+  save_model: true
+  save_report: true
