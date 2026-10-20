@@ -20,22 +20,42 @@ def split_by_task(df, target, task, split_cfg):
     X = df.drop(columns=[target])
 
     stratify_y = y if (task == "classification" and stratify) else None
-    X_train, X_tmp, y_train, y_tmp = train_test_split(
-        X, y,
-        test_size=1 - train_ratio,
-        random_state=rs,
-        stratify=stratify_y,
-    )
+    try:
+        X_train, X_tmp, y_train, y_tmp = train_test_split(
+            X, y,
+            test_size=1 - train_ratio,
+            random_state=rs,
+            stratify=stratify_y,
+        )
+    except ValueError:
+        import warnings
+        warnings.warn("stratify failed (rare classes); retrying without stratify")
+        X_train, X_tmp, y_train, y_tmp = train_test_split(
+            X, y,
+            test_size=1 - train_ratio,
+            random_state=rs,
+            stratify=None,
+        )
     stratify_tmp = y_tmp if (task == "classification" and stratify) else None
     if val_ratio <= 0:
         X_val, X_test, y_val, y_test = X_tmp[0:0], X_tmp, y_tmp[0:0], y_tmp
     else:
-        X_val, X_test, y_val, y_test = train_test_split(
-            X_tmp, y_tmp,
-            test_size=test_ratio / (val_ratio + test_ratio),
-            random_state=rs,
-            stratify=stratify_tmp,
-        )
+        try:
+            X_val, X_test, y_val, y_test = train_test_split(
+                X_tmp, y_tmp,
+                test_size=test_ratio / (val_ratio + test_ratio),
+                random_state=rs,
+                stratify=stratify_tmp,
+            )
+        except ValueError:
+            import warnings
+            warnings.warn("stratify failed on val/test split; retrying without stratify")
+            X_val, X_test, y_val, y_test = train_test_split(
+                X_tmp, y_tmp,
+                test_size=test_ratio / (val_ratio + test_ratio),
+                random_state=rs,
+                stratify=None,
+            )
     return {
         "X_train": X_train,
         "y_train": y_train,

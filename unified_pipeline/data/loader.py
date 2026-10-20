@@ -30,9 +30,28 @@ def _load_sklearn(name):
 
 
 def _load_file(path):
-    ext = os.path.splitext(path)[1].lower()
+    from .type_detector import TABULAR_EXT
+    ext = os.path.splitext(str(path))[1].lower()
+    if ext not in TABULAR_EXT:
+        raise ValueError("Unsupported tabular file extension: {}".format(ext))
     if ext == ".csv":
-        df = pd.read_csv(path)
+        for enc in ("utf-8-sig", "utf-8", "latin1"):
+            try:
+                df = pd.read_csv(path, encoding=enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            df = pd.read_csv(path)
+    elif ext == ".tsv":
+        for enc in ("utf-8-sig", "utf-8", "latin1"):
+            try:
+                df = pd.read_csv(path, sep="\t", encoding=enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            df = pd.read_csv(path, sep="\t")
     elif ext in (".xlsx", ".xls"):
         df = pd.read_excel(path)
     elif ext == ".parquet":
@@ -41,11 +60,14 @@ def _load_file(path):
         df = pd.read_json(path)
     else:
         raise ValueError("Unsupported tabular file extension: {}".format(ext))
+    if df.empty:
+        raise ValueError("Tabular file is empty: {}".format(path))
     return df
 
 
 def load_dataset(cfg):
     source = cfg["data"]["source"]
+    source = str(source) if source is not None else ""
     if source.startswith("sklearn:"):
         bundle = _load_sklearn(source.split(":", 1)[1])
     else:
@@ -59,6 +81,8 @@ def load_dataset(cfg):
         )
 
     drop_cols = cfg["data"].get("drop_columns") or []
+    if isinstance(drop_cols, str):
+        drop_cols = [drop_cols]
     explicit_target = cfg["data"].get("target", "auto")
     # Normalize explicit_target for unsupervised (None/null)
     if explicit_target is None:

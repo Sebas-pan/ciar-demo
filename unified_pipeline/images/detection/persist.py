@@ -3,14 +3,14 @@ import datetime
 
 def build_image_metadata(
     dataset_dir, data_spec, variant, weights, metrics,
-    train_cfg, device, source,
+    train_cfg, device, source, model_type="yolo11",
 ):
     return {
         "version": "1.0",
         "data_type": "image",
         "framework": "torch",
         "task": "detection",
-        "model_type": "yolo11",
+        "model_type": model_type,
         "variant": variant,
         "weights": weights,
         "nc": data_spec["nc"],
@@ -20,5 +20,5 @@ def build_image_metadata(
         "device": str(device),
         "dataset_dir": dataset_dir,
         "source": source,
-        "created_at": datetime.datetime.utcnow().isoformat(),
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }

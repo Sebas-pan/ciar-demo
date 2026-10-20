@@ -82,26 +82,32 @@ def run_evaluation_classification(cfg, model, bundles, out_dir):
     with open(os.path.join(out_dir, "metrics.json"), "w", encoding="utf-8") as fh:
         json.dump(metrics, fh, ensure_ascii=False, indent=2)
 
-    # confusion matrix plot
+    # confusion matrix plot (scales with class count so 45+ classes stay legible)
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         import numpy as np
-        fig, ax = plt.subplots(figsize=(5,4))
-        ax.imshow(cm, cmap="Blues")
-        ax.set_xticks(range(len(test_bundle.names)))
-        ax.set_yticks(range(len(test_bundle.names)))
-        ax.set_xticklabels(test_bundle.names, rotation=45, ha="right")
-        ax.set_yticklabels(test_bundle.names)
-        for i in range(len(cm)):
-            for j in range(len(cm[0])):
-                ax.text(j, i, str(cm[i][j]), ha="center", va="center", color="white" if cm[i][j] > max(max(row) for row in cm)/2 else "black")
-        ax.set_xlabel("Pred")
-        ax.set_ylabel("True")
-        ax.set_title("Confusion Matrix")
+        nc = len(test_bundle.names)
+        figsize = (min(20, max(8, int(0.45 * nc))), min(16, max(6, int(0.45 * nc))))
+        fig, ax = plt.subplots(figsize=figsize)
+        im = ax.imshow(cm, cmap="Blues")
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        ax.set_xticks(range(nc))
+        ax.set_yticks(range(nc))
+        ax.set_xticklabels(test_bundle.names, rotation=90, fontsize=6 if nc > 10 else 8)
+        ax.set_yticklabels(test_bundle.names, fontsize=6 if nc > 10 else 8)
+        if nc <= 10:
+            vmax = max(max(row) for row in cm)
+            for i in range(len(cm)):
+                for j in range(len(cm[0])):
+                    ax.text(j, i, str(cm[i][j]), ha="center", va="center",
+                            color="white" if cm[i][j] > vmax / 2 else "black", fontsize=7)
+        ax.set_xlabel("Pred", fontsize=10)
+        ax.set_ylabel("True", fontsize=10)
+        ax.set_title("Confusion Matrix", fontsize=12)
         fig.tight_layout()
-        fig.savefig(os.path.join(out_dir, "confusion_matrix.png"), dpi=120)
+        fig.savefig(os.path.join(out_dir, "confusion_matrix.png"), dpi=150, bbox_inches="tight")
         plt.close(fig)
     except Exception:
         pass

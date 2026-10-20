@@ -100,6 +100,7 @@ def run_training_classification(cfg, model, bundles, run_dir):
     best_acc = -1.0
     best_state = None
     no_improve = 0
+    epoch_losses = []
 
     # tqdm: outer epoch bar, disable if not a tty
     use_tqdm = sys.stdout.isatty()
@@ -123,6 +124,9 @@ def run_training_classification(cfg, model, bundles, run_dir):
             batches += 1
             if use_tqdm:
                 batch_iter.set_postfix(loss=f"{running_loss/batches:.4f}")
+
+        epoch_loss = running_loss / max(batches, 1)
+        epoch_losses.append(epoch_loss)
 
         # validation
         acc = None
@@ -150,6 +154,25 @@ def run_training_classification(cfg, model, bundles, run_dir):
     # If no val, best is last
     if best_state is None:
         best_state = {k: v.cpu() for k, v in model.state_dict().items()}
+
+    # Save loss curve
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        train_dir = os.path.join(run_dir, "train")
+        os.makedirs(train_dir, exist_ok=True)
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(range(1, len(epoch_losses) + 1), epoch_losses, marker="o", color="tab:red")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Train loss")
+        ax.set_title("Training Loss Curve")
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(os.path.join(train_dir, "loss_curve.png"), dpi=120, bbox_inches="tight")
+        plt.close(fig)
+    except Exception:
+        pass
 
     # Save
     out_dir = os.path.join(run_dir, "train", "weights")

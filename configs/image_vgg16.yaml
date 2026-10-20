@@ -26,7 +26,7 @@ model:
 
 xai:
   narrative: true
-  use_llm: false
+  use_llm: true
   methods: [gradcam, occlusion]
   gradcam:
     layer: features.28

@@ -2,7 +2,9 @@ data_type: auto
 
 data:
   source: "sklearn:breast_cancer"
-  target: auto
+  target: SalePrice
+  drop_columns:
+    - Id
 
 supervised:
   task: classification  # classification | regression | auto

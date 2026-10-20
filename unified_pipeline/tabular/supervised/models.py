@@ -10,14 +10,14 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 _MODELS = {
     "classification": {
-        "logistic": LogisticRegression,
+        "logisttic": LogisticRegression,
         "decision_tree": DecisionTreeClassifier,
         "random_forest": RandomForestClassifier,
         "svm": SVC,
         "xgboost": "XGBClassifier",
     },
     "regression": {
-        "logistic": LinearRegression,
+        "linear": LinearRegression,
         "decision_tree": DecisionTreeRegressor,
         "random_forest": RandomForestRegressor,
         "svm": SVR,
@@ -54,8 +54,10 @@ def create_estimator(model_type, task, params):
         from sklearn.calibration import CalibratedClassifierCV
         from sklearn.svm import SVC
 
+        cv = int(merged.pop("calibration_cv", 3))
+        cv = max(2, cv)
         return CalibratedClassifierCV(
-            SVC(**merged), method="sigmoid", cv=3)
+            SVC(**merged), method="sigmoid", cv=cv)
     entry = table[model_type]
     if isinstance(entry, str):
         cls = _xgb_class(entry)

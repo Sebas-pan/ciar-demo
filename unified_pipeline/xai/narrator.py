@@ -241,6 +241,87 @@ def narrate_cluster_profiles(centroids_json_path=None, centroids_data=None, top_
         return ""
 
 
+def narrate_classification(metrics, names, predictions, xai):
+    """Narrativa global y por imagen para la rama de clasificación."""
+    lines = []
+    acc = metrics.get("accuracy")
+    f1 = metrics.get("f1")
+    n_test = metrics.get("n_test")
+    if acc is not None:
+        test_txt = " sobre {} imágenes de test".format(n_test) if n_test else " en el conjunto de test"
+        lines.append(
+            "El modelo alcanzó una **exactitud (accuracy) de {:.3f}** ({:.1f}%)".format(
+                float(acc), float(acc) * 100)
+            + (" y un **F1 de {:.3f}**".format(float(f1)) if f1 is not None else "")
+            + "{}, lo que indica que clasifica los objetos con {} precisión.".format(
+                test_txt, "muy buena" if float(acc) >= 0.9 else "buena"))
+
+    per_class = metrics.get("per_class") or {}
+    if per_class:
+        ranked = sorted(
+            ((n, (v or {}).get("f1") or 0.0) for n, v in per_class.items()),
+            key=lambda t: -t[1])
+        if ranked:
+            best, best_v = ranked[0]
+            worst, worst_v = ranked[-1]
+            lines.append(
+                "La clase mejor clasificada es **{}** (F1 = {:.3f})".format(best, best_v))
+            if len(ranked) > 1:
+                lines.append(
+                    "y la más difícil es **{}** (F1 = {:.3f}).".format(worst, worst_v))
+            else:
+                lines.append(".")
+
+    cm = metrics.get("confusion_matrix")
+    if isinstance(cm, list) and len(cm) == 2 and all(isinstance(r, list) and len(r) == 2 for r in cm):
+        errors = int(cm[0][1] + cm[1][0])
+        total = int(cm[0][0] + cm[0][1] + cm[1][0] + cm[1][1])
+        if total:
+            lines.append(
+                "Confundió **{} de {}** imágenes ({:.2%}).".format(errors, total, errors / total))
+
+    if not lines:
+        return ""
+
+    header = ["## ¿Qué está haciendo este modelo?", ""]
+    header.extend(lines)
+    header.append("")
+
+    for rec in predictions or []:
+        img = rec.get("image") or "desconocida"
+        pred = rec.get("pred_name") or rec.get("pred_class")
+        conf = rec.get("confidence")
+        if conf is None:
+            header.append(
+                "En `{}` el modelo predijo **{}**.".format(img, pred))
+            continue
+        try:
+            c = float(conf)
+        except (TypeError, ValueError):
+            header.append(
+                "En `{}` el modelo predijo **{}**.".format(img, pred))
+            continue
+        if c >= 0.9:
+            nivel = "con confianza alta"
+        elif c >= 0.6:
+            nivel = "con confianza moderada — caso límite que conviene revisar"
+        else:
+            nivel = "con confianza baja — predicción incierta"
+        header.append(
+            "En `{}` el modelo predijo **{}** {} (**{:.2%}**).".format(img, pred, nivel, c))
+
+        gradcam = (xai.get("gradcam") or {}).get("instances") or []
+        matched = [inst for inst in gradcam if inst.get("image") == rec.get("image")]
+        if matched:
+            inst = matched[0]
+            header.append(
+                "El mapa de calor **Grad-CAM** señala las regiones de la "
+                "imagen que más respaldan la clase predicha "
+                "({}).".format(inst.get("pred_name") or pred))
+
+    return "\n".join(header)
+
+
 def narrate_image(metrics, names, predictions, xai):
     """Narrativa global y por imagen para la rama de detección."""
     lines = []

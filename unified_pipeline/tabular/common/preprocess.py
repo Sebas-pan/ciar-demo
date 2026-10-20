@@ -1,5 +1,6 @@
 """Shared preprocessing for both supervised and unsupervised tabular branches."""
 import numpy as np
+import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
@@ -7,8 +8,14 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
 def build_preprocessor(X_train):
+    bool_cols = X_train.select_dtypes(include=["bool"]).columns.tolist()
     numeric_cols = X_train.select_dtypes(include=[np.number]).columns.tolist()
-    categorical_cols = X_train.select_dtypes(exclude=[np.number]).columns.tolist()
+    # bools are numeric for scaling, not categorical
+    numeric_cols = sorted(set(numeric_cols) | set(bool_cols))
+    categorical_cols = [c for c in X_train.columns
+                        if c not in numeric_cols
+                        and pd.api.types.is_datetime64_any_dtype(X_train[c])
+                        and not np.issubdtype(X_train[c].dtype, np.datetime64)]
 
     transformers = []
     if numeric_cols:
@@ -25,7 +32,7 @@ def build_preprocessor(X_train):
             "cat",
             Pipeline([
                 ("imputer", SimpleImputer(strategy="most_frequent")),
-                ("onehot", OneHotEncoder(handle_unknown="ignore")),
+                ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
             ]),
             categorical_cols,
         ))

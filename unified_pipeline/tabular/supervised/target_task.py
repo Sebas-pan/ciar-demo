@@ -13,11 +13,11 @@ def resolve_target(df, target_cfg):
         return target_cfg
     for hint in TARGET_HINTS:
         for col in df.columns:
-            if col.strip().lower() == hint:
+            if str(col).strip().lower() == hint:
                 return col
     raise ValueError(
-        "No se ha podido encontrar la columna objetivo (target) en el dataframe."
-        "Por favor, especifiquela en $data.target"
+        "No se ha podido encontrar la columna objetivo (target) en el dataframe. "
+        "Por favor, especifiquela en data.target"
     )
     # return df.columns[-1]
 
@@ -35,8 +35,8 @@ def resolve_target(df, target_cfg):
 
 def _detect_task(y):
     if (pd.api.types.is_object_dtype(y)  # text
-            or pd.api.types.is_string_dtype(y)  # pandas 3.x usa dtype 'str'
-            or pd.CategoricalDtype.is_dtype(y)  # pandas 3.x usa dtype 'categorical'◘
+            or pd.api.types.is_string_dtype(y)
+            or isinstance(y.dtype, pd.CategoricalDtype)
             or pd.api.types.is_bool_dtype(y)
             # or pd.api.types.is_categorical_dtype(y)  # Low/medium/high -> deprecated
             ):

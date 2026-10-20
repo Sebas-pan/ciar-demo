@@ -39,16 +39,22 @@ def is_tree_based(model):
 
 
 def run_shap(model, X_train, X_test, feature_names, out_dir,
-             sample_limit=200, num_instances=3, top_n=8):
+             sample_limit=200, num_instances=3, top_n=8, task="classification",
+             random_state=42):
+    rng = np.random.default_rng(random_state)
     if is_tree_based(model):
         explainer = _safe_tree_explainer(model)
     else:
-        background = X_train[: min(100, X_train.shape[0])]
+        n_bg = min(100, X_train.shape[0])
+        bg_idx = rng.choice(X_train.shape[0], n_bg, replace=False)
+        background = X_train[bg_idx] if hasattr(X_train, "__getitem__") else X_train[:n_bg]
         if hasattr(background, "toarray"):
             background = background.toarray()
-        explainer = _safe_kernel_explainer(model, background)
+        explainer = _safe_kernel_explainer(model, background, task=task)
 
-    X_eval = X_test[: min(sample_limit, X_test.shape[0])]
+    n_eval = min(sample_limit, X_test.shape[0])
+    eval_idx = rng.choice(X_test.shape[0], n_eval, replace=False)
+    X_eval = X_test[eval_idx] if hasattr(X_test, "__getitem__") else X_test[:n_eval]
     if hasattr(X_eval, "toarray"):
         X_eval = X_eval.toarray()
     raw = explainer.shap_values(np.asarray(X_eval, dtype=float))
@@ -97,7 +103,16 @@ def _safe_tree_explainer(model):
     return shap.TreeExplainer(model)
 
 
-def _safe_kernel_explainer(model, background):
+def _safe_kernel_explainer(model, background, task="classification"):
     import shap
-    
-    return shap.KernelExplainer(model.predict, background)
+
+    if task == "classification" and hasattr(model, "predict_proba"):
+        def predict_fn(X):
+            return model.predict_proba(np.asarray(X, dtype=float))
+    elif task == "classification" and hasattr(model, "decision_function"):
+        def predict_fn(X):
+            return model.decision_function(np.asarray(X, dtype=float))
+    else:
+        def predict_fn(X):
+            return model.predict(np.asarray(X, dtype=float))
+    return shap.KernelExplainer(predict_fn, np.asarray(background, dtype=float))

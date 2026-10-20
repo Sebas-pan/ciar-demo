@@ -5,16 +5,27 @@ unified_pipeline/outputs/runs/
 .env
 
 # Python virtual environments
-.venv/
 venv/
+.venv/
 
-unified_pipeline/data/CatsDogs_YOLO11/
-unified_pipeline/data/Clustering/
-unified_pipeline/data/house_prices/
-unified_pipeline/data/PetImages/
+.env
+
+
+/unified_pipeline/data/CatsDogs_YOLO11/
+/unified_pipeline/data/Clustering/
+/unified_pipeline/data/house_prices/
+/unified_pipeline/data/PetImages/
+/unified_pipeline/data/dogs_yolo26/
+/unified_pipeline/data/mammals/
 
 configs/models/
 
 unified_pipeline/weights/
 
 weights/
+
+AGENTS.md
+
+# Python bytecode
+__pycache__/
+*.py[cod]

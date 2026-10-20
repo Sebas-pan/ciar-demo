@@ -19,24 +19,36 @@ def main(argv=None):
 
     if args.command == "run":
         cfg = load_config(args.config)
-        # Unsupervised tabular takes precedence if configured
-        unsup_task = (cfg.get("unsupervised") or {}).get("task")
+        # Unsupervised tabular takes precedence if configured (normalized)
+        unsup_raw = (cfg.get("unsupervised") or {}).get("task")
+        unsup_task = str(unsup_raw).strip().lower().replace("-", "_") \
+            if unsup_raw not in (None, "") else unsup_raw
         if unsup_task not in (None, "", "auto"):
             from .tabular.unsupervised.pipeline import run_clustering
             summary = run_clustering(cfg)
         else:
-            data_type = detect_data_type(cfg["data"]["source"])
+            wanted = str(cfg.get("data_type", "auto")).strip().lower()
+            if wanted in ("tabular", "image"):
+                data_type = wanted
+            else:
+                data_type = detect_data_type(cfg["data"]["source"])
             if data_type == "tabular":
                 summary = run_tabular(cfg)
-            else:
+            elif data_type == "image":
                 summary = run_image(cfg)
+            else:
+                parser.error("Unknown data type '{}'".format(data_type))
         _print_summary(summary)
+        return summary
 
 
 def _print_summary(summary):
+    summary = summary or {}
     print("\n=== UNIFIED PIPELINE: {} | {} | {} ===".format(
-        summary["data_type"], summary["task"], summary["model"]))
-    print("Source: {} | Target: {}".format(summary["source"], summary["target"]))
+        summary.get("data_type", "?"), summary.get("task", "?"),
+        summary.get("model", "?")))
+    print("Source: {} | Target: {}".format(
+        summary.get("source", "?"), summary.get("target", "?")))
     # Device banner — show CUDA vs CPU prominently
     dev = summary.get("device")
     if dev:
@@ -66,28 +78,33 @@ def _print_summary(summary):
     test_n = splits.get("test", "?")
     print("Splits (train/val/test): {} / {} / {}".format(train_n, val_n, test_n))
     print("--- Metrics ---")
-    for key, value in summary["metrics"].items():
-        if key in ("confusion_matrix", "classification_report", "cluster_sizes"):
-            if key == "cluster_sizes":
+    metrics = summary.get("metrics") or {}
+    if not isinstance(metrics, dict):
+        print("  (non-dict metrics: {})".format(metrics))
+    else:
+        for key, value in metrics.items():
+            if key in ("confusion_matrix", "classification_report", "cluster_sizes"):
+                if key == "cluster_sizes":
+                    print("  {}: {}".format(key, value))
+                continue
+            if isinstance(value, float):
+                print("  {}: {:.4f}".format(key, value))
+            elif isinstance(value, int):
                 print("  {}: {}".format(key, value))
-            continue
-        if isinstance(value, float):
-            print("  {}: {:.4f}".format(key, value))
-        elif isinstance(value, int):
-            print("  {}: {}".format(key, value))
-        elif isinstance(value, dict):
-            print("  {}: {}".format(key, value))
+            elif isinstance(value, dict):
+                print("  {}: {}".format(key, value))
     print("--- XAI ---")
-    for key, value in summary["xai"].items():
+    xai = summary.get("xai") or {}
+    for key, value in xai.items():
         if value is None or value == {}:
             status = "skipped"
-        elif "error" in value:
+        elif isinstance(value, dict) and "error" in value:
             status = "ERROR: {}".format(value["error"])
         else:
             status = "OK"
         print("  {}: {}".format(key, status))
     print("--- Output ---")
-    print("  run_dir: {}".format(summary["run_dir"]))
+    print("  run_dir: {}".format(summary.get("run_dir", "?")))
 
 
 if __name__ == "__main__":

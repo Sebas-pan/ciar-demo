@@ -11,9 +11,16 @@ def save_artifact(out_dir, model, preprocessor, meta):
     preproc_path = os.path.join(out_dir, "preprocessor.pkl")
     joblib.dump(model, model_path)
     joblib.dump(preprocessor, preproc_path)
+    meta = dict(meta)
     meta["model_path"] = "model.pkl"
     meta["preprocessor_path"] = "preprocessor.pkl"
-    meta["created_at"] = datetime.datetime.now().isoformat()
+    meta["created_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    try:
+        import sklearn, numpy
+        meta.setdefault("sklearn_version", sklearn.__version__)
+        meta.setdefault("numpy_version", numpy.__version__)
+    except Exception:
+        pass
     with open(os.path.join(out_dir, "metadata.json"), "w", encoding="utf-8") as fh:
         json.dump(meta, fh, ensure_ascii=False, indent=2, default=str)
     return out_dir

@@ -1,7 +1,7 @@
 data_type: auto
 
 data:
-  source: "unified_pipeline/data/PetImages"
+  source: "unified_pipeline/data/mammals"
   target: auto
 
 model:
@@ -10,7 +10,7 @@ model:
   pretrained: true
   device: "0"
   train:
-    epochs: 30
+    epochs: 100
     imgsz: 224
     batch: 16                # VRAM fallback per approval (was 32)
     workers: 4
@@ -25,7 +25,7 @@ model:
 
 xai:
   narrative: true
-  use_llm: false
+  use_llm: true
   # NOTE: Swin GradCAM is diffuse — occlusion is the primary explainer.
   methods: [gradcam, occlusion]
   gradcam:

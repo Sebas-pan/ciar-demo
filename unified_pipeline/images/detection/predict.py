@@ -29,6 +29,14 @@ def save_prediction(result, out_path):
     return out_path
 
 
+def _class_name(cls_names, lbl):
+    if isinstance(cls_names, (list, tuple)):
+        return str(cls_names[int(lbl)]) if 0 <= int(lbl) < len(cls_names) else str(lbl)
+    if isinstance(cls_names, dict):
+        return str(cls_names.get(int(lbl), cls_names.get(str(lbl), lbl)))
+    return str(lbl)
+
+
 def summarize_result(result):
     """Convierte un objeto Results a dict JSON-serializable."""
     boxes = result.boxes
@@ -41,11 +49,11 @@ def summarize_result(result):
         for box, c, lbl in zip(xyxy, conf, cls):
             dets.append({
                 "class": int(lbl),
-                "class_name": cls_names.get(int(lbl), str(lbl)),
+                "class_name": _class_name(cls_names, lbl),
                 "confidence": round(float(c), 4),
                 "bbox_xyxy": [round(float(v), 1) for v in box],
             })
-    return {"image": getattr(result, "path", None), "detections": dets}
+    return {"image": str(getattr(result, "path", None)), "detections": dets}
 
 
 def run_predictions(cfg, model, images, out_dir, conf=0.25, iou=0.5):
@@ -56,7 +64,12 @@ def run_predictions(cfg, model, images, out_dir, conf=0.25, iou=0.5):
     os.makedirs(out_dir, exist_ok=True)
     summaries = []
     for img_path in images:
-        result = predict_image(cfg, model, img_path, conf=conf, iou=iou)
+        try:
+            result = predict_image(cfg, model, img_path, conf=conf, iou=iou)
+        except Exception as exc:
+            import warnings
+            warnings.warn("predict failed for {}: {}".format(img_path, exc))
+            continue
         out_path = os.path.join(out_dir, os.path.splitext(os.path.basename(str(img_path)))[0] + "_pred.jpg")
         save_prediction(result, out_path)
         summary = summarize_result(result)

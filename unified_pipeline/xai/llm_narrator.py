@@ -7,13 +7,22 @@ cuando no hay configurada la clave API.
 """
 
 import os
-from openai import OpenAI
-from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 
 def _get_client():
     """Devuelve un cliente OpenAI recién creado usando la clave del entorno."""
+    if OpenAI is None:
+        return None
     api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if not api_key:
         return None
@@ -152,6 +161,112 @@ def narrate_cluster_profiles(centroids_json_path=None, centroids_data=None, top_
             pass
     from . import narrator as det
     return det.narrate_cluster_profiles(centroids_json_path, centroids_data, top_k)
+
+
+# ---------------------------------------------------------------------------
+# Image branch — firmas idénticas a narrator.narrate_image /
+# narrator.narrate_classification para swap transparente
+# ---------------------------------------------------------------------------
+def _summarize_detections(predictions, max_items=4):
+    """Resume detections demo en una línea corta para el prompt."""
+    parts = []
+    for rec in (predictions or [])[:max_items]:
+        dets = rec.get("detections") or []
+        img = (rec.get("image") or "?").split("\\")[-1].split("/")[-1]
+        if not dets:
+            parts.append(f"{img}: sin detecciones")
+            continue
+        counts = {}
+        confs = []
+        for d in dets:
+            cn = d.get("class_name") or str(d.get("class"))
+            counts[cn] = counts.get(cn, 0) + 1
+            confs.append(float(d.get("confidence") or 0.0))
+        desc = ", ".join(f"{v}x {k}" for k, v in counts.items())
+        parts.append(f"{img}: {desc} (conf. media {sum(confs)/len(confs):.0%})")
+    return "; ".join(parts) if parts else "sin ejemplos"
+
+
+def narrate_image_detection(metrics, names, predictions, xai):
+    """Intenta LLM para detección; si falla, usa narrator determinista."""
+    client = _get_client()
+    if client is not None:
+        try:
+            map50 = metrics.get("mAP50")
+            map5095 = metrics.get("mAP50-95")
+            metric_txt = (
+                f"mAP50 de {map50:.3f} y mAP50-95 de {map5095:.3f}"
+                if map50 is not None else "buen rendimiento")
+            per_class = metrics.get("per_class") or {}
+            if per_class:
+                ranked = sorted(
+                    ((n, (v or {}).get("AP50") or 0.0) for n, v in per_class.items()),
+                    key=lambda t: -t[1])
+                cls_txt = (f"La clase mejor detectada es {ranked[0][0]} "
+                           f"(AP50 {ranked[0][1]:.3f}) y la más difícil es "
+                           f"{ranked[-1][0]} (AP50 {ranked[-1][1]:.3f}). "
+                           if len(ranked) > 1 else
+                           f"Clase {ranked[0][0]} con AP50 {ranked[0][1]:.3f}. ")
+            else:
+                cls_txt = ""
+            demo_txt = _summarize_detections(predictions)
+            prompt = (
+                f"Eres un experto en visión por computador. Escribe un párrafo en español, "
+                f"máximo 4 oraciones, explicando un modelo de detección de objetos "
+                f"({', '.join(names)}) con {metric_txt}. {cls_txt}"
+                f"Ejemplos: {demo_txt}. "
+                f"Tono cercano para usuario no técnico, sin fórmulas ni siglas sin explicar, solo el texto."
+            )
+            response = client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = (response.choices[0].message.content or "").strip()
+            if text:
+                return text
+        except Exception:
+            pass
+    from . import narrator as det
+    return det.narrate_image(metrics, names, predictions, xai)
+
+
+def narrate_image_classification(metrics, names, predictions, xai):
+    """Intenta LLM para clasificación de imágenes; si falla, usa determinista."""
+    client = _get_client()
+    if client is not None:
+        try:
+            acc = metrics.get("accuracy")
+            f1 = metrics.get("f1")
+            n_test = metrics.get("n_test")
+            metric_txt = (
+                f"exactitud del {acc*100:.1f}%"
+                + (f" y F1 de {f1:.3f}" if f1 is not None else "")
+                + (f" sobre {n_test} imágenes" if n_test else ""))
+            demo_parts = []
+            for rec in (predictions or [])[:4]:
+                img = (rec.get("image") or "?").split("\\")[-1].split("/")[-1]
+                pred = rec.get("pred_name") or rec.get("pred_class")
+                conf = rec.get("confidence")
+                conf_txt = f" ({float(conf):.0%})" if conf is not None else ""
+                demo_parts.append(f"{img}: {pred}{conf_txt}")
+            demo_txt = "; ".join(demo_parts) if demo_parts else "sin ejemplos"
+            prompt = (
+                f"Eres un experto en visión por computador. Escribe un párrafo en español, "
+                f"máximo 4 oraciones, explicando un clasificador de imágenes "
+                f"({', '.join(names)}) con {metric_txt}. Ejemplos: {demo_txt}. "
+                f"Tono cercano para usuario no técnico, sin fórmulas, solo el texto."
+            )
+            response = client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = (response.choices[0].message.content or "").strip()
+            if text:
+                return text
+        except Exception:
+            pass
+    from . import narrator as det
+    return det.narrate_classification(metrics, names, predictions, xai)
 
 
 def narrate_top_features(

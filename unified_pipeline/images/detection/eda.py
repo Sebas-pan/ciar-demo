@@ -17,39 +17,55 @@ _CLASS_COLORS = [
 
 def _parse_label_file(path):
     ids = []
-    if not path or not os.path.exists(path):
+    if not path or str(path) in ("", "."):
         return ids
-    with open(path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            parts = line.split()
-            if parts:
-                try:
-                    ids.append(int(float(parts[0])))
-                except ValueError:
-                    pass
+    try:
+        if not os.path.isfile(path):
+            return ids
+    except (OSError, ValueError):
+        return ids
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                parts = line.split()
+                if parts:
+                    try:
+                        ids.append(int(float(parts[0])))
+                    except ValueError:
+                        pass
+    except OSError:
+        pass
     return ids
 
 
 def _parse_label_boxes(path, w, h):
     """Retorna lista de (cid, x1, y1, x2, y2) en píxeles desde un label YOLO."""
     boxes = []
-    if not path or not os.path.exists(path):
+    if not path or str(path) in ("", "."):
         return boxes
-    with open(path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            parts = line.split()
-            if len(parts) < 5:
-                continue
-            try:
-                cid = int(float(parts[0]))
-                xc, yc, bw, bh = map(float, parts[1:5])
-            except ValueError:
-                continue
-            boxes.append((
-                cid,
-                int((xc - bw / 2) * w), int((yc - bh / 2) * h),
-                int((xc + bw / 2) * w), int((yc + bh / 2) * h),
-            ))
+    try:
+        if not os.path.isfile(path):
+            return boxes
+    except (OSError, ValueError):
+        return boxes
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                parts = line.split()
+                if len(parts) < 5:
+                    continue
+                try:
+                    cid = int(float(parts[0]))
+                    xc, yc, bw, bh = map(float, parts[1:5])
+                except ValueError:
+                    continue
+                boxes.append((
+                    cid,
+                    int((xc - bw / 2) * w), int((yc - bh / 2) * h),
+                    int((xc + bw / 2) * w), int((yc + bh / 2) * h),
+                ))
+    except OSError:
+        pass
     return boxes
 
 

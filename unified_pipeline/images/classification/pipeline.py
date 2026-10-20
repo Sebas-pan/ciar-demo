@@ -9,6 +9,7 @@ from ..common.device import resolve_device
 from .models import create_vgg16, create_resnet50, create_classifier, identify_model_type
 from .trainer import run_training_classification
 from .evaluate import run_evaluation_classification
+from ...xai.llm_narrator import narrate_image_classification as llm_narrate_image
 from .persist import build_classification_metadata
 from .eda import run_eda_classification
 from .predict import run_predictions_classification
@@ -121,8 +122,13 @@ def run_classification(cfg):
             xai["occlusion"] = {"error": str(exc)}
 
     # Report
+    use_llm = bool(xai_cfg.get("use_llm", False))
+    if use_llm:
+        _llm_narrate_image_fn = lambda m, n, p, x: llm_narrate_image(m, n, p, x)
+    else:
+        _llm_narrate_image_fn = None
     if outputs.get("save_report", True):
-        _build_classification_report(run_dir, metrics, names, variant, device, train_minutes, predictions, xai, xai_dir, eda_summary, meta, narrative=bool(xai_cfg.get("narrative", True)), model_label=f"{model_type} ({variant})")
+        _build_classification_report(run_dir, metrics, names, variant, device, train_minutes, predictions, xai, xai_dir, eda_summary, meta, narrative=bool(xai_cfg.get("narrative", True)), model_label=f"{model_type} ({variant})", narrate_image_func=_llm_narrate_image_fn)
 
     # Normalize split_shapes to train/val/test (valid -> val)
     raw_splits = {b.split: len(b.images) for b in bundles}
@@ -147,9 +153,9 @@ def run_classification(cfg):
     }
 
 
-def _build_classification_report(run_dir, metrics, names, variant, device, train_minutes, predictions, xai, xai_dir, eda, model_meta, narrative=True, model_label=None):
-    from ...xai.narrator import narrate_image as det_narrate_image
-    # For classification, craft simple markdown
+def _build_classification_report(run_dir, metrics, names, variant, device, train_minutes, predictions, xai, xai_dir, eda, model_meta, narrative=True, model_label=None, narrate_image_func=None):
+    from ...xai.narrator import narrate_classification
+    # Para clasificación, markdown en español a la par del reporte de detección
     try:
         import torch
         if isinstance(device, int):
@@ -165,35 +171,125 @@ def _build_classification_report(run_dir, metrics, names, variant, device, train
                     pass
     except Exception:
         dev_str = str(device)
-    lines = [f"# Image Classification Report — {model_label or f'VGG16 ({variant})'}", f"*Device: {dev_str}*", ""]
-    if narrative:
-        lines.append("## What the model did")
-        acc = metrics.get("accuracy")
-        f1 = metrics.get("f1")
-        if acc is not None:
-            lines.append(f"Accuracy **{acc:.3f}** ({acc*100:.1f}%), F1 **{f1:.3f}** on {metrics.get('n_test', '?')} test images ({', '.join(names)}).")
-        lines.append(f"Trained {train_minutes} min on device **{dev_str}**.")
-        lines.append("")
-    lines.append("## Metrics")
-    for k in ["accuracy","precision","recall","f1"]:
+    label = model_label or "Clasificador ({})".format(variant)
+    lines = [f"# Reporte — Clasificación de imágenes {label}", ""]
+    lines.append("## Entrenamiento")
+    lines.append("- Modelo: `{}` (variante `{}`)".format(
+        (model_meta or {}).get("model_type", variant), variant))
+    lines.append("- Dispositivo: `{}` · tiempo: {} min".format(dev_str, train_minutes))
+    lines.append("- Clases: {}".format(", ".join(names)))
+    lines.append("- EDA: `class_distribution.png`, `sample_grid.jpg` y "
+                 "`eda_classification.json` (distribución por split, stats de tamaño)")
+    if isinstance(eda, dict) and eda.get("splits"):
+        splits_txt = ", ".join(
+            "{}: {}".format(k, v) for k, v in eda["splits"].items())
+        lines.append("- Splits (imágenes): {}".format(splits_txt))
+    lines.append("- Curva de pérdida: `train/loss_curve.png`")
+    lines.append("")
+
+    lines.append("## Métricas (test)")
+    acc = metrics.get("accuracy")
+    if acc is not None:
+        lines.append("- Exactitud (accuracy): **{:.4f}**".format(float(acc)))
+    for k in ["precision", "recall", "f1"]:
         if k in metrics:
-            lines.append(f"- **{k}**: {metrics[k]:.4f}")
+            lines.append("- {}: {:.4f}".format(
+                {"precision": "Precisión (media)", "recall": "Recall (media)", "f1": "F1 (media)"}[k],
+                float(metrics[k])))
+    if metrics.get("n_test") is not None:
+        lines.append("- Imágenes de test: {}".format(metrics["n_test"]))
+    for cls, vals in (metrics.get("per_class") or {}).items():
+        lines.append("    - {} · P={:.4f} · R={:.4f} · F1={:.4f} (n={})".format(
+            cls,
+            float(vals.get("precision", 0.0)),
+            float(vals.get("recall", 0.0)),
+            float(vals.get("f1", 0.0)),
+            vals.get("support", "?"),
+        ))
+    cm = metrics.get("confusion_matrix")
     lines.append("")
-    if "per_class" in metrics:
-        lines.append("### Per-class")
-        for cls, vals in metrics["per_class"].items():
-            lines.append(f"- **{cls}**: P {vals['precision']:.3f} R {vals['recall']:.3f} F1 {vals['f1']:.3f} (n={vals['support']})")
+    lines.append("## Matriz de confusión (test)")
+    if isinstance(cm, list) and cm and all(isinstance(r, list) for r in cm):
+        n_cm = len(cm)
+        lines.append("![Matriz de confusión](val/confusion_matrix.png)")
         lines.append("")
-    lines.append("## Predictions (demo)")
-    for p in predictions:
-        lines.append(f"- `{os.path.basename(p['image'])}` → **{p['pred_name']}** ({p['confidence']:.2%})")
+        # top confused pairs (off-diagonal max)
+        try:
+            import numpy as _np
+            cm_arr = _np.array(cm, dtype=float)
+            _np.fill_diagonal(cm_arr, -1.0)
+            flat = cm_arr.reshape(-1)
+            top_idx = _np.argsort(flat)[-5:][::-1]
+            names_list = list(names)
+            pairs = []
+            for idx in top_idx:
+                i = int(idx // n_cm)
+                j = int(idx % n_cm)
+                v = float(cm_arr[i, j])
+                if v < 0:
+                    continue
+                pairs.append("{}→{}: {}".format(
+                    names_list[i] if i < len(names_list) else i,
+                    names_list[j] if j < len(names_list) else j,
+                    int(v)))
+            if pairs:
+                lines.append("Pares más confundidos: " + "; ".join(pairs))
+        except Exception:
+            pass
+    else:
+        lines.append("No disponible.")
     lines.append("")
-    lines.append("## XAI")
-    for k, v in xai.items():
-        if v and "error" in v:
-            lines.append(f"- **{k}**: ERROR {v['error']}")
-        elif v:
-            lines.append(f"- **{k}**: OK")
+
+    if narrative:
+        narrate = narrate_image_func or narrate_classification
+        text = narrate(metrics, names, predictions, xai)
+        if text:
+            lines.append(text)
+            lines.append("")
+
+    lines.append("## Predicciones de ejemplo (`predictions/`)")
+    for p in predictions or []:
+        conf = p.get("confidence")
+        conf_txt = "{:.2%}".format(float(conf)) if conf is not None else "n/d"
+        lines.append("- `{}` → **{}** ({})".format(
+            os.path.basename(p.get("image") or ""), p.get("pred_name"), conf_txt))
+    lines.append("")
+
+    lines.append("## Explicabilidad (`xai/`)")
+    lines.append("")
+    for method in ["gradcam", "occlusion"]:
+        entry = (xai or {}).get(method)
+        lines.append("### {}".format(method.upper()))
+        if entry is None:
+            lines.append("No ejecutado.")
+        elif isinstance(entry, dict) and "error" in entry:
+            lines.append("**ERROR**: {}".format(entry["error"]))
+        else:
+            lines.append("Artefactos:")
+            for inst in (entry or {}).get("instances", []):
+                png = os.path.basename(inst.get("out") or "")
+                cls_name = inst.get("pred_name") or inst.get("class_name")
+                if cls_name is None and isinstance(inst.get("pred"), int):
+                    idx = inst["pred"]
+                    if 0 <= idx < len(names):
+                        cls_name = names[idx]
+                if cls_name:
+                    lines.append("- `{}` (clase predicha: {})".format(png, cls_name))
+                else:
+                    lines.append("- `{}`".format(png))
+        lines.append("")
+
+    lines.append("## Cómo interpretar los mapas")
+    lines.append("""- **Grad-CAM**: mapa de calor sobre la última capa convolucional.
+    Las zonas rojas muestran qué regiones **respaldan** la clase predicha.
+- **Occlusion Sensitivity**: se ocluye la imagen por celdas y se mide la caída
+    de confianza (softmax) de la clase predicha. Celdas rojas = la confianza
+    **depende** de esa zona.
+""")
+    lines.append("Artículo de referencia: métricas en `val/metrics.json`, "
+                 "predicciones en `predictions/predictions.json`, "
+                 "detalle XAI en `xai/xai_summary.json` y mapas `.jpg`.")
+
     with open(os.path.join(run_dir, "report.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
     write_json(os.path.join(xai_dir, "xai_summary.json"), xai)

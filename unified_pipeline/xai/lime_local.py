@@ -49,10 +49,18 @@ def run_lime(model, X_train, y_train, X_test, y_test, feature_names,
             predict_fn=predict_fn,
             num_features=num_features,
         )
+        try:
+            idx = int(y_test.index[i])
+        except (ValueError, TypeError):
+            idx = str(y_test.index[i])
+        try:
+            true_val = coerce_true(y_test.iloc[i])
+        except (ValueError, TypeError):
+            true_val = str(y_test.iloc[i])
         explanations.append({
             "position": i,
-            "index": int(y_test.index[i]),
-            "true": coerce_true(y_test.iloc[i]),
+            "index": idx,
+            "true": true_val,
             "as_list": exp.as_list(),
         })
     if out_dir:

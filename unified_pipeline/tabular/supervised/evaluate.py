@@ -24,9 +24,18 @@ def _classification_metrics(model, X_test, y_test):
         "f1": float(f1_score(
             y_test, y_pred, average="weighted", zero_division=0)),
     }
-    if hasattr(model, "predict_proba") and len(np.unique(y_test)) == 2:
-        proba = model.predict_proba(X_test)[:, 1]
-        metrics["roc_auc"] = float(roc_auc_score(y_test, proba))
+    if hasattr(model, "predict_proba"):
+        n_classes = len(np.unique(y_test))
+        if n_classes == 2:
+            proba = model.predict_proba(X_test)[:, 1]
+            metrics["roc_auc"] = float(roc_auc_score(y_test, proba))
+        elif n_classes > 2:
+            try:
+                proba = model.predict_proba(X_test)
+                metrics["roc_auc_ovr"] = float(roc_auc_score(
+                    y_test, proba, multi_class="ovr", average="weighted"))
+            except Exception:
+                pass
     metrics["confusion_matrix"] = confusion_matrix(y_test, y_pred).tolist()
     metrics["classification_report"] = classification_report(
         y_test, y_pred, output_dict=True, zero_division=0)

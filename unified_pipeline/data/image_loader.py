@@ -19,6 +19,25 @@ def _read_data_yaml(yaml_path: Path) -> dict:
         return yaml.safe_load(f)
 
 
+def _load_names_nc(yaml_data, fallback_names=("class_0", "class_1")):
+    """Single shared names/nc normalizer: dict keys sorted numerically."""
+    nc = int((yaml_data or {}).get("nc", 0) or 0)
+    raw_names = (yaml_data or {}).get("names")
+    if isinstance(raw_names, list):
+        names = [str(n) for n in raw_names]
+    elif isinstance(raw_names, dict):
+        try:
+            keys = sorted(raw_names.keys(), key=lambda k: int(k))
+        except (ValueError, TypeError):
+            keys = sorted(raw_names.keys(), key=str)
+        names = [str(raw_names[k]) for k in keys]
+    else:
+        names = list(fallback_names)
+    if nc and len(names) < nc:
+        names = names + ["class_{}".format(i) for i in range(len(names), nc)]
+    return nc, names
+
+
 def build_yolo_data_spec(dataset_dir: str) -> dict:
     """Construye el dict de datos absoluto para la detección.
 
@@ -34,13 +53,8 @@ def build_yolo_data_spec(dataset_dir: str) -> dict:
     nc = 0
     if yaml_path.is_file():
         with open(yaml_path, "r", encoding="utf-8") as fh:
-            raw = yaml.safe_load(fh)
-        nc = int(raw.get("nc", 0))
-        raw_names = raw.get("names")
-        if isinstance(raw_names, list):
-            names = [str(n) for n in raw_names]
-        elif isinstance(raw_names, dict):
-            names = [str(raw_names[k]) for k in sorted(raw_names)] or names
+            raw = yaml.safe_load(fh) or {}
+        nc, names = _load_names_nc(raw)
 
     spec = {
         "path": str(base),
@@ -55,7 +69,7 @@ def build_yolo_data_spec(dataset_dir: str) -> dict:
     if nc == 0:
         # inferir nc desde las anotaciones si no viene en data.yaml
         seen = set()
-        for split in ("train", "valid", "test"):
+        for split in ("train", "valid", "val", "test"):
             lbl_dir = base / split / "labels"
             if not lbl_dir.is_dir():
                 continue
@@ -72,6 +86,10 @@ def build_yolo_data_spec(dataset_dir: str) -> dict:
             nc = max(seen) + 1
             spec["nc"] = nc
             spec["names"] = names if len(names) >= nc else [f"class_{i}" for i in range(nc)]
+    if spec.get("nc", 0) == 0:
+        raise ValueError(
+            "Could not determine nc (num classes) for dataset '{}': "
+            "no 'nc' in data.yaml and no labels found".format(base))
     return spec
 
 
@@ -108,25 +126,23 @@ def _collect_split_images_labels(base_dir: Path, split_name: str) -> Tuple[List[
 
     img_exts = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif", "*.tif", "*.tiff", "*.webp"]
     images: List[Path] = []
+    seen_names = set()
     for ext in img_exts:
         images.extend(img_dir.glob(ext))
-    # sort for deterministic order
-    images = sorted(images, key=lambda p: p.name)
+        # Uppercase variants common from cameras/Roboflow (e.g. *.JPG)
+        images.extend(img_dir.glob(ext.upper()))
+    for p in images:
+        seen_names.add(p.name)
+    images = sorted(seen_names)
+    images = [img_dir / n for n in images]
+    if not images:
+        raise ValueError("No images found in {}".format(img_dir))
 
-    # Corresponding labels: same stem in the labels dir (no OS-specific path hacks)
+    # Corresponding labels: same stem in the labels dir. Missing labels keep
+    # the expected path (checked with is_file() downstream) — never Path("").
     labels: List[Path] = []
     for img_path in images:
         lbl_path = lbl_dir / (img_path.stem + ".txt")
-        if lbl_dir.exists() and not lbl_path.exists():
-            # fallback: some datasets have .png labels etc.; try to find any label
-            found = False
-            for lbl_try in lbl_dir.glob("*.txt"):
-                if lbl_try.stem == img_path.stem:
-                    lbl_path = lbl_try
-                    found = True
-                    break
-            if not found:
-                lbl_path = Path("")  # placeholder
         labels.append(lbl_path)
 
     return images, labels
@@ -155,25 +171,22 @@ def load_yolo_dataset(dataset_dir: str,
             "Place data.yaml at the root of the YOLO dataset directory."
         )
 
-    yaml_data = _read_data_yaml(yaml_path)
-    nc = yaml_data.get("nc", 0)
-    names = yaml_data.get("names", [f"class_{i}" for i in range(nc)])
-
-    # Asegurar nombres consistentes (si data.yaml tiene nc pero no names, rellenar)
-    if len(names) < nc:
-        names = names + [f"class_{i}" for i in range(len(names), nc)]
+    yaml_data = _read_data_yaml(yaml_path) or {}
+    nc, names = _load_names_nc(yaml_data)
 
     bundles: List[ImageSplitBundle] = []
     for split in splits:
         images, labels = _collect_split_images_labels(base, split)
-        # Filtrar imágenes inexistentes; mantener la imagen aunque falte su label
+        # Filtrar imágenes inexistentes; mantener la imagen aunque falte su label.
+        # Missing labels keep the expected (non-existent) path; downstream
+        # checks is_file() — never a Path("") placeholder (== Path(".")).
         valid_imgs = []
         valid_lbls = []
         for img, lbl in zip(images, labels):
             if not img.exists():
                 continue
             valid_imgs.append(img)
-            valid_lbls.append(lbl if lbl.exists() else Path(""))
+            valid_lbls.append(lbl if lbl.is_file() else lbl)
         bundles.append(ImageSplitBundle(
             images=valid_imgs,
             labels=valid_lbls,

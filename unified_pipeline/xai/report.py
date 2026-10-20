@@ -23,12 +23,24 @@ def build_report(model, task, X_test, y_test, class_names,
     shap_instances = shap_data.get("instances") or []
 
     def _coerce(value):
-        return float(value) if task == "regression" else int(value)
+        if task == "regression":
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return str(value)
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return str(value)
 
     for i in range(min(num_instances, X_test.shape[0])):
+        try:
+            idx = int(y_test.index[i])
+        except (ValueError, TypeError):
+            idx = str(y_test.index[i])
         rec = {
             "position": i,
-            "index": int(y_test.index[i]),
+            "index": idx,
             "true": _coerce(y_test.iloc[i]),
         }
         row = X_test[i]
@@ -41,7 +53,14 @@ def build_report(model, task, X_test, y_test, class_names,
                 str(c): round(float(p), 4)
                 for c, p in zip(model.classes_, proba)
             }
-            rec["prediction"] = int(model.classes_[int(np.argmax(proba))])
+            rec["prediction"] = model.classes_[int(np.argmax(proba))].item() \
+                if hasattr(model.classes_[int(np.argmax(proba))], "item") \
+                else model.classes_[int(np.argmax(proba))]
+            # stringify numpy scalars for JSON safety
+            try:
+                rec["prediction"] = int(rec["prediction"])
+            except (ValueError, TypeError):
+                rec["prediction"] = str(rec["prediction"])
         else:
             rec["prediction"] = _coerce(model.predict(row)[0])
         if i < len(lime_instances):
@@ -95,7 +114,12 @@ def write_report(instances, xai_dir, run_dir, metrics=None, task=None,
             lines.append("- Probabilidades: {}".format(rec["probabilities"]))
         if "top_features_lime" in rec:
             lines.append("- Top features LIME:")
-            for feat, weight in rec["top_features_lime"]:
+            for item in rec["top_features_lime"]:
+                try:
+                    feat, weight = item
+                except (ValueError, TypeError):
+                    lines.append("    - {}".format(item))
+                    continue
                 lines.append("    - {} -> {:.4f}".format(feat, weight))
         if "top_shap" in rec:
             lines.append("- Top SHAP:")

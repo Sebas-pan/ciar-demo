@@ -5,7 +5,9 @@ def resolve_device(cfg):
     """Devuelve str/número adecuado para ultralytics y torch a partir de cfg['device']."""
     import torch
 
-    device = cfg["model"].get("device", "auto")
+    device = (cfg.get("model") or {}).get("device", "auto")
+    if isinstance(device, int):
+        return device if torch.cuda.is_available() else "cpu"
     if isinstance(device, str):
         device = device.strip().lower()
     if device in ("auto", "gpu", "best"):
@@ -14,6 +16,9 @@ def resolve_device(cfg):
         # '0' sirve para ultralytics pero NO para torch (`.to('0')` falla);
         # normalizamos a int para que valga en ambos.
         return int(device) if torch.cuda.is_available() else "cpu"
+    if isinstance(device, str) and device.startswith("cuda") \
+            and not torch.cuda.is_available():
+        return "cpu"
     return device
 
 
@@ -24,7 +29,7 @@ def run_training(cfg, model, data_spec, run_dir):
     imgsz = int(train_cfg.get("imgsz", 640))
     batch = train_cfg.get("batch", 16)
     device = resolve_device(cfg)
-    workers = int(train_cfg.get("workers", 2))
+    workers = int(train_cfg.get("workers", 0))
     optimizer = train_cfg.get("optimizer", "auto")
     lr = train_cfg.get("lr")
     patience = int(train_cfg.get("patience", 100))
@@ -47,7 +52,7 @@ def run_training(cfg, model, data_spec, run_dir):
         verbose=True,
     )
     if augment is False:
-        train_args.pop("augment", None)
+        train_args["augment"] = False
         train_args["hsv_h"] = 0.0
         train_args["hsv_s"] = 0.0
         train_args["hsv_v"] = 0.0

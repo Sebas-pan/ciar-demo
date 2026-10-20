@@ -30,6 +30,8 @@ def run_gradcam(cfg, model, image_paths, out_dir,
     train_cfg = cfg["model"].get("train", {})
     raw_module = model.model
     device = resolve_device(cfg)
+    if isinstance(device, int):
+        device = "cuda:{}".format(device)
     raw_module.to(device)
     if imgsz is None:
         imgsz = int(train_cfg.get("imgsz", 640))
@@ -108,9 +110,17 @@ def run_gradcam(cfg, model, image_paths, out_dir,
 
 def _det_heads(raw_module):
     det = raw_module.model[-1]
+    # YOLO11 Detect head exposes .cv3 (class branch per scale). Newer
+    # YOLO variants (v10/YOLO26) renamed/restructured the head: accept
+    # equivalent class-branch attributes before giving up.
     if hasattr(det, "cv3"):
         return det
-    raise ValueError("No Detect head (cv3) found. Ensure model is a YOLO detection model.")
+    for alt in ("cv2", "cls", "cv4"):
+        if hasattr(det, alt):
+            return det
+    raise ValueError(
+        "No Detect head (cv3/cv2/cls) found. Ensure model is a YOLO "
+        "detection model; Grad-CAM is disabled for this variant.")
 
 
 def _forward_gradcam(raw_module, det, tensor, H, W, device, target_cls=None):
@@ -151,7 +161,13 @@ def _forward_gradcam(raw_module, det, tensor, H, W, device, target_cls=None):
             f.copy_(feat.to(device))
             feats_norm.append(f)
 
-        act_list = [det.cv3[i](feat) for i, feat in enumerate(feats_norm)]
+        cls_branch = getattr(det, "cv3", None)
+        if cls_branch is None:
+            for alt in ("cv2", "cls", "cv4"):
+                if hasattr(det, alt):
+                    cls_branch = getattr(det, alt)
+                    break
+        act_list = [cls_branch[i](feat) for i, feat in enumerate(feats_norm)]
 
         if target_cls is None:
             nc = act_list[0].shape[1]

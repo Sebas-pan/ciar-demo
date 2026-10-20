@@ -2,7 +2,8 @@ data_type: auto
 
 data:
   # Carpetas train/valid/test con images/ y labels/ (formato YOLO detection)
-  source: "unified_pipeline/data/CatsDogs_YOLO11"
+  # source: "unified_pipeline/data/CatsDogs_YOLO11"
+  source: "unified_pipeline/data/dogs_yolo26"
   target: auto
 
 model:
@@ -13,7 +14,7 @@ model:
     epochs: 150
     imgsz: 640
     batch: 16
-    workers: 2
+    workers: 0
     optimizer: auto
     patience: 15
     seed: 42

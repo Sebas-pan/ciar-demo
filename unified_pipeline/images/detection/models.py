@@ -3,12 +3,18 @@ import shutil
 
 YOLO_VARIANTS = {
     "yolov11n": "yolo11n.pt",
+    "yolo11n": "yolo11n.pt",
     "yolov11s": "yolo11s.pt",
+    "yolo11s": "yolo11s.pt",
     "yolov11m": "yolo11m.pt",
+    "yolo11m": "yolo11m.pt",
     "yolov11l": "yolo11l.pt",
+    "yolo11l": "yolo11l.pt",
     "yolov11x": "yolo11x.pt",
+    "yolo11x": "yolo11x.pt",
     "yolov8n": "yolov8n.pt",
     "yolo26n": "yolo26n.pt",
+    "yolo26m": "yolo26m.pt",
 }
 
 # Per-variant download base (v8.4.0 tag predates YOLO26).
@@ -19,7 +25,10 @@ _DEFAULT_URL_BASE = "https://github.com/ultralytics/assets/releases/download/v8.
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-_WEIGHTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "weights")
+# unified_pipeline/weights/ (three levels up from this file), as documented.
+_WEIGHTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "weights")
 
 
 def create_estimator(cfg):
@@ -36,7 +45,7 @@ def create_estimator(cfg):
 
     model_cfg = cfg["model"]
     weights = model_cfg.get("weights")
-    variant = model_cfg.get("variant", "yolov11n")
+    variant = str(model_cfg.get("variant", "yolov11n")).strip().lower()
 
     if weights:
         if not os.path.exists(weights):
@@ -62,13 +71,27 @@ def create_estimator(cfg):
         os.makedirs(_WEIGHTS_DIR, exist_ok=True)
         base = _VARIANT_URL_BASE.get(variant, _DEFAULT_URL_BASE)
         url = "{}{}".format(base, filename)
-        if not safe_download(url=url, file=local, unzip=False, delete=False):
+        try:
+            ok = safe_download(url=url, file=local, unzip=False, delete=False)
+        except Exception as exc:
+            ok = False
+            dl_exc = exc
+        else:
+            dl_exc = None
+        if not ok:
+            # Remove partial download so the next run retries cleanly.
+            for p in (local, local + ".part"):
+                try:
+                    if os.path.exists(p):
+                        os.remove(p)
+                except OSError:
+                    pass
             # Last resort: let ultralytics resolve its own cache/download.
             try:
                 return YOLO(filename)
             except Exception:
                 pass
-            raise RuntimeError("Could not download {}".format(url))
+            raise RuntimeError("Could not download {}".format(url)) from dl_exc
 
     # cargamos con ruta absoluta para evitar depender del weights_dir global
     model = YOLO(local)

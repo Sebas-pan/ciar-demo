@@ -1,6 +1,7 @@
-import datetime
 import os
+import warnings
 
+from ...config import make_run_dir
 from ...data.loader import load_dataset
 from ...data.validation import validate
 from ...io import write_json
@@ -33,7 +34,12 @@ def run_tabular(cfg):
     preprocessor, _, _ = build_preprocessor(parts["X_train"])
     X_train_t = preprocessor.transform(parts["X_train"])
     X_test_t = preprocessor.transform(parts["X_test"])
-    X_val_t = preprocessor.transform(parts["X_val"])
+    if len(parts["X_val"]) > 0:
+        X_val_t = preprocessor.transform(parts["X_val"])
+    else:
+        warnings.warn("Validation split is empty; skipping val metrics")
+        import numpy as np
+        X_val_t = np.zeros((0, X_train_t.shape[1]))
     feature_names = transformed_feature_names(preprocessor)
 
     model_cfg = cfg["model"]
@@ -61,12 +67,7 @@ def run_tabular(cfg):
     )
 
     outputs = cfg["output"]
-    run_dir = os.path.join(
-        outputs["dir"],
-        "runs",
-        datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
-    )
-    os.makedirs(run_dir, exist_ok=True)
+    run_dir = make_run_dir(outputs["dir"])
 
     run_eda(df, target, run_dir)
 
@@ -95,14 +96,17 @@ def run_tabular(cfg):
     if xai_cfg.get("feature_importance", True):
         try:
             table, method = global_importance(
-                estimator, feature_names, X_test_t, parts["y_test"])
+                estimator, feature_names, X_test_t, parts["y_test"],
+                n_repeats=int(xai_cfg.get("permutation_repeats", 5)))
             plot_importance(
-                table, os.path.join(xai_dir, "feature_importance.png"))
+                table, os.path.join(xai_dir, "feature_importance.png"),
+                top_n=int(xai_cfg.get("top_features", 15)))
             write_json(
                 os.path.join(xai_dir, "feature_importance.json"),
                 table.to_dict(orient="records"))
             xai["feature_importance"] = {"method": method, "saved": True}
         except Exception as exc:
+            warnings.warn("feature_importance failed: {}".format(exc))
             xai["feature_importance"] = {"error": str(exc)}
 
     if xai_cfg.get("shap", True):
@@ -113,9 +117,15 @@ def run_tabular(cfg):
                 X_test=X_test_t,
                 feature_names=feature_names,
                 out_dir=xai_dir,
+                sample_limit=int(xai_cfg.get("shap_sample_limit", 200)),
+                num_instances=int(xai_cfg.get("num_instances", 3)),
+                top_n=int(xai_cfg.get("top_features", 15)),
+                task=task,
+                random_state=split_cfg.get("random_state", 42),
             )
             xai["shap"] = {"saved": True, "instances": shap_out["instances"]}
         except Exception as exc:
+            warnings.warn("SHAP failed: {}".format(exc))
             xai["shap"] = {"error": str(exc)}
 
     if xai_cfg.get("lime", True):
@@ -136,6 +146,7 @@ def run_tabular(cfg):
             )
             xai["lime"] = {"saved": True, "instances": lime_out}
         except Exception as exc:
+            warnings.warn("LIME failed: {}".format(exc))
             xai["lime"] = {"error": str(exc)}
 
     instances = build_report(
@@ -174,9 +185,9 @@ def run_tabular(cfg):
         "target": target,
         "source": bundle.source,
         "split_shapes": {
-            "train": int(X_train_t.shape[0]),
+            "train": int(len(parts["X_train"])),
             "val": int(len(parts["X_val"])),
-            "test": int(X_test_t.shape[0]),
+            "test": int(len(parts["X_test"])),
         },
         "metrics": metrics,
         "val_metrics": val_metrics,

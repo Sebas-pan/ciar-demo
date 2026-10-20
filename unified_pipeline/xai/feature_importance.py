@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-def global_importance(model, feature_names, X=None, y=None):
+def global_importance(model, feature_names, X=None, y=None, n_repeats=5,
+                      random_state=42):
     if hasattr(model, "feature_importances_"):
         values = model.feature_importances_
         method = "feature_importances_"
@@ -23,7 +24,7 @@ def global_importance(model, feature_names, X=None, y=None):
         from sklearn.inspection import permutation_importance
 
         r = permutation_importance(
-            model, X, y, n_repeats=10, random_state=42, n_jobs=-1)
+            model, X, y, n_repeats=n_repeats, random_state=random_state, n_jobs=-1)
         values = r.importances_mean
         method = "permutation"
     table = pd.DataFrame({

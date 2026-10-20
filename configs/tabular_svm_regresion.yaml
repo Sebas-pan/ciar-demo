@@ -1,0 +1,39 @@
+data_type: auto
+
+data:
+  source: "unified_pipeline/data/house_prices/train.csv"
+  target: SalePrice
+  drop_columns:
+    - Id
+
+supervised:
+  task: regression  # classification | regression | auto
+
+split:
+  train_val_test: [0.7, 0.15, 0.15]
+  stratify: true
+  random_state: 42
+
+model:
+  # Wrapped as CalibratedClassifierCV(SVC) in tabular/supervised/models.py
+  # so predict_proba exists for LIME.
+  type: svm
+  params:
+    C: 1.0
+    kernel: rbf
+  search: null
+
+xai:
+  feature_importance: true  # permutation fallback (SVC has no coef_/importances_)
+  shap: true                # KernelExplainer(predict)
+  lime: true                # predict_proba via calibration wrapper
+  num_features: 10
+  num_instances: 3
+  narrative: true
+  top_features: 15
+  use_llm: true
+
+output:
+  dir: "unified_pipeline/outputs"
+  save_model: true
+  save_report: true
