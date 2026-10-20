@@ -18,6 +18,8 @@ venv/
 /unified_pipeline/data/dogs_yolo26/
 /unified_pipeline/data/mammals/
 
+/unified_pipeline/weights/
+
 configs/models/
 
 unified_pipeline/weights/
